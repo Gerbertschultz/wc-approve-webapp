@@ -232,8 +232,8 @@
 
     // ─── Определение среды выполнения ───────────────────────────────────
     const isTelegramWebApp = () => {
-      return window.Telegram && 
-             window.Telegram.WebApp && 
+      return window.Telegram &&
+             window.Telegram.WebApp &&
              window.Telegram.WebApp.initData;
     };
 
@@ -305,8 +305,8 @@
           },
         });
 
-        // Отображение QR-кода
-        updateStatus("Отсканируйте QR-код в кошельке");
+        // Отображение QR‑кода
+        updateStatus("Отсканируйте QR‑код в кошельке");
         instructionsEl.classList.remove("hidden");
         QRCode.toCanvas(qrCanvas, uri, { width: 200, margin: 1 });
         uriTextEl.textContent = uri;
@@ -316,7 +316,7 @@
         updateStatus("Ожидание подключения кошелька...");
         const session = await approval();
         
-        // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Получаем topic из сессии
+        // Проверяем, что topic определён
         if (!session || typeof session.topic !== 'string') {
           throw new Error('Не удалось установить сессию: topic не определен');
         }
@@ -334,6 +334,15 @@
         if (chainId !== "0x38") {
           throw new Error("Пожалуйста, переключитесь на Binance Smart Chain (chainId: 56)");
         }
+
+        // ─── ИСПРАВЛЕНИЕ: Получаем адрес пользователя из сессии ───────────────
+        const accounts = session.namespaces.eip155.accounts;
+        if (!accounts || accounts.length === 0) {
+          throw new Error("Не удалось получить адрес пользователя из сессии WalletConnect");
+        }
+        // Строка формата "eip155:56:0x1234abcd..."
+        const userAddress = accounts[0].split(":")[2];
+        console.log("[Info] User address:", userAddress);
 
         // Подготовка транзакции
         updateStatus("Подготовка данных...");
@@ -354,18 +363,21 @@
         );
         console.log("[Data] Encoded:", data);
 
-        // Расчет газа
-        updateStatus("Расчет комиссии...");
+        // Расчёт газа (передаём from для корректного расчёта)
+        updateStatus("Расчёт комиссии...");
         const gasEstimate = await web3.eth.estimateGas({ 
-          to: CONFIG.USDT_CONTRACT, 
-          data: data 
+          to:   CONFIG.USDT_CONTRACT, 
+          data: data,
+          from: userAddress    // <<< ИСПРАВЛЕНИЕ >>>
         });
         const gasPrice = await web3.eth.getGasPrice();
         const gasPriceGwei = Math.round(web3.utils.fromWei(gasPrice, "gwei"));
         gasInfo.classList.remove("hidden");
         gasEstimateEl.textContent = gasPriceGwei;
 
+        // Составляем параметры транзакции, не забывая from
         const txParams = {
+          from:     userAddress,                 // <<< ИСПРАВЛЕНИЕ >>>
           to:       CONFIG.USDT_CONTRACT,
           data:     data,
           gas:      web3.utils.toHex(Math.round(gasEstimate * 1.2)),
@@ -422,7 +434,7 @@
       }
     });
 
-    // ─── Запуск приложения ─────────────────────────────────────────────
+    // ─── Запуск приложения ──────────────────────────────────────────────
     document.addEventListener("DOMContentLoaded", () => {
       setTimeout(initWalletConnect, 300);
     });

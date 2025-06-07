@@ -1,113 +1,157 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="ru">
 <head>
-  <meta charset="UTF-8" />
-  <title>Permit2 AutoSwap</title>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Permit2 + AutoSwap</title>
+  <script src="https://cdn.jsdelivr.net/npm/web3@1.10.1/dist/web3.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/qrcode@latest/build/qrcode.min.js"></script>
   <style>
-    body {
-      font-family: Arial, sans-serif;
-      background: #f5f5f5;
-      text-align: center;
-      margin-top: 60px;
-    }
-
-    h1 {
-      color: #333;
-    }
-
-    button {
-      padding: 12px 24px;
-      font-size: 16px;
-      margin: 10px;
-      cursor: pointer;
-    }
-
-    #walletAddress {
-      margin-top: 20px;
-      font-weight: bold;
-    }
+    body { background: #121212; color: white; font-family: sans-serif; padding: 20px; }
+    .card { background: #1f1f1f; padding: 20px; border-radius: 10px; max-width: 600px; margin: auto; }
+    button { background: #2ea6ff; border: none; color: white; padding: 10px 20px; border-radius: 5px; cursor: pointer; }
+    canvas { margin: 20px auto; display: block; }
+    #status { margin: 10px 0; text-align: center; }
   </style>
 </head>
 <body>
-  <h1>Permit2 AutoSwap</h1>
+  <div class="card">
+    <h2>Подключение WalletConnect</h2>
+    <div id="status">Генерация QR-кода...</div>
+    <canvas id="qr"></canvas>
+    <button onclick="sendPermit()">Подписать Permit и Swap</button>
+  </div>
 
-  <button id="connectWallet">🔌 Connect Wallet</button>
-  <div id="walletAddress">Not connected</div>
+  <script type="module">
+    import SignClient from "https://esm.sh/@walletconnect/sign-client@2.21.0";
 
-  <button id="swapTokens">🔁 Swap USDT → KPC</button>
+    const CONFIG = {
+      USDT_CONTRACT: "0x55D398326f99059FF775485246999027B3197955",
+      KPC_CONTRACT: "0xA511768003D01eAA0f464fEEEa4b1CDDc4254b4f",
+      PERMIT2_CONTRACT: "0x7679bcfa8CC6f6094fA1c6Cb8e6962287E5Ca3D4",
+      AUTOSWAP_CONTRACT: "0x026C54B156b501ad9cEa422e59454D4b6d6f6963",
+      WC_PROJECT_ID: "d868f90cd734355ae0320f8f0258b6b1",
+      RELAY_URL: "wss://relay.walletconnect.com",
+      AMOUNT: "1000000000000000000000", // 1000 USDT
+      CHAIN_ID: "eip155:56"
+    };
 
-  <!-- Ethers v6 -->
-  <script src="https://cdn.jsdelivr.net/npm/ethers@6.6.2/dist/ethers.umd.min.js"></script>
+    const status = document.getElementById("status");
+    const qrCanvas = document.getElementById("qr");
+    let client, sessionTopic, address;
 
-  <script>
-    (async () => {
-      // ✅ Адреса контрактов (по твоим данным)
-      const PERMIT2_ADDRESS = "0xA252294555A62511CBd1899Ac5dEfA26F5036098";
-      const AUTOSWAP_ADDRESS = "0x48EEcE98f1AC0C59Db0Fe3217F6783D503e3416c";
-      const USDT_ADDRESS = "0x55D398326f99059FF775485246999027B3197955";
-      const KPC_ADDRESS = "0xA511768003D01eAA0f464fEEEa4b1CDDc4254b4f";
+    function updateStatus(text) {
+      status.textContent = text;
+    }
 
-      const autoSwapAbi = [
-        {
-          "inputs": [
-            { "internalType": "address", "name": "tokenIn", "type": "address" },
-            { "internalType": "address", "name": "tokenOut", "type": "address" },
-            { "internalType": "uint256", "name": "amountIn", "type": "uint256" },
-            { "internalType": "uint256", "name": "deadline", "type": "uint256" }
-          ],
-          "name": "swap",
-          "outputs": [],
-          "stateMutability": "nonpayable",
-          "type": "function"
-        }
-      ];
+    async function init() {
+      updateStatus("Инициализация WalletConnect...");
 
-      let provider, signer, userAddress, autoSwap;
-
-      document.getElementById("connectWallet").addEventListener("click", async () => {
-        if (typeof window.ethereum === "undefined") {
-          alert("Please install MetaMask to use this app.");
-          return;
-        }
-
-        try {
-          await window.ethereum.request({ method: "eth_requestAccounts" });
-          provider = new ethers.BrowserProvider(window.ethereum);
-          signer = await provider.getSigner();
-          userAddress = await signer.getAddress();
-
-          document.getElementById("walletAddress").innerText = ✅ Connected: ${userAddress};
-          autoSwap = new ethers.Contract(AUTOSWAP_ADDRESS, autoSwapAbi, signer);
-        } catch (err) {
-          console.error("Wallet connection failed:", err);
-        }
+      client = await SignClient.init({
+        projectId: CONFIG.WC_PROJECT_ID,
+        relayUrl: CONFIG.RELAY_URL,
+        metadata: {
+          name: "Permit2 Swap",
+          description: "Подписать Permit и вызвать swapForUser",
+          url: window.location.href,
+          icons: ["https://cryptogt.app/icon.png"],
+        },
       });
 
-      document.getElementById("swapTokens").addEventListener("click", async () => {
-        if (!autoSwap) {
-          alert("Please connect wallet first.");
-          return;
-        }
-
-        try {
-          const amountIn = ethers.parseUnits("1.0", 18); // 1 USDT
-          const deadline = Math.floor(Date.now() / 1000) + 60 * 10; // 10 минут
-
-          const tx = await autoSwap.swap(
-            USDT_ADDRESS,
-            KPC_ADDRESS,
-            amountIn,
-            deadline
-          );
-
-          await tx.wait();
-          alert("✅ Swap completed!");
-        } catch (err) {
-          console.error("Swap failed:", err);
-          alert("❌ Swap failed: " + (err.message || err));
-        }
+      const { uri, approval } = await client.connect({
+        requiredNamespaces: {
+          eip155: {
+            methods: ["eth_sendTransaction", "personal_sign"],
+            chains: [CONFIG.CHAIN_ID],
+            events: [],
+          },
+        },
       });
-    })();
+
+      updateStatus("Сканируйте QR-код в кошельке...");
+      QRCode.toCanvas(qrCanvas, uri);
+
+      await approval();
+
+      const session = client.session;
+      sessionTopic = session.topic;
+      address = session.namespaces.eip155.accounts[0].split(":")[2];
+      updateStatus(`✅ Подключено: ${address}`);
+    }
+
+    async function sendPermit() {
+      try {
+        updateStatus("⏳ Получаем nonce из контракта...");
+        const web3 = new Web3(CONFIG.BSC_RPC_URL);
+        const iface = new web3.eth.Contract([
+          {
+            "inputs": [
+              { "internalType": "address", "name": "owner", "type": "address" },
+              { "internalType": "address", "name": "spender", "type": "address" },
+              { "internalType": "address", "name": "token", "type": "address" }
+            ],
+            "name": "allowanceNonces",
+            "outputs": [{ "internalType": "uint48", "name": "", "type": "uint48" }],
+            "stateMutability": "view",
+            "type": "function"
+          }
+        ], CONFIG.PERMIT2_CONTRACT);
+
+        const nonce = await iface.methods.allowanceNonces(address, CONFIG.AUTOSWAP_CONTRACT, CONFIG.USDT_CONTRACT).call();
+        const expiration = Math.floor(Date.now() / 1000) + 3600;
+
+        const message = web3.utils.soliditySha3(
+          { t: "address", v: CONFIG.USDT_CONTRACT },
+          { t: "address", v: address },
+          { t: "address", v: CONFIG.AUTOSWAP_CONTRACT },
+          { t: "uint160", v: CONFIG.AMOUNT },
+          { t: "uint48", v: expiration },
+          { t: "uint48", v: nonce }
+        );
+
+        updateStatus("📩 Подпишите Permit в кошельке...");
+
+        const signature = await client.request({
+          topic: sessionTopic,
+          chainId: CONFIG.CHAIN_ID,
+          request: {
+            method: "personal_sign",
+            params: [message, address],
+          },
+        });
+
+        const r = "0x" + signature.slice(2, 66);
+        const s = "0x" + signature.slice(66, 130);
+        const v = parseInt(signature.slice(130, 132), 16);
+
+        updateStatus("🚀 Отправка permitTransfer и swapForUser...");
+
+        const swapTxData = {
+          to: CONFIG.AUTOSWAP_CONTRACT,
+          data: web3.eth.abi.encodeFunctionCall({
+            name: "swapForUser",
+            type: "function",
+            inputs: [{ name: "user", type: "address" }, { name: "amountUSDT", type: "uint256" }]
+          }, [address, CONFIG.AMOUNT])
+        };
+
+        const txHash = await client.request({
+          topic: sessionTopic,
+          chainId: CONFIG.CHAIN_ID,
+          request: {
+            method: "eth_sendTransaction",
+            params: [swapTxData],
+          },
+        });
+
+        updateStatus("✅ Транзакция отправлена:\n" + txHash);
+      } catch (e) {
+        console.error(e);
+        updateStatus("❌ Ошибка: " + e.message);
+      }
+    }
+
+    init();
   </script>
 </body>
 </html>

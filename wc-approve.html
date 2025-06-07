@@ -32,7 +32,7 @@
 
   <button id="swapTokens">🔁 Swap USDT → KPC</button>
 
-  <!-- ✅ Версия ethers.js v6, безопасная для браузеров -->
+  <!-- Рабочая версия Ethers.js v6 -->
   <script src="https://cdn.jsdelivr.net/npm/ethers@6.6.2/dist/ethers.umd.min.js"></script>
 
   <script>
@@ -42,7 +42,6 @@
     const USDT_ADDRESS      = "0x55D398326f99059FF775485246999027B3197955";
     const KPC_ADDRESS       = "0xA511768003D01eAA0f464fEEEa4b1CDDc4254b4f";
 
-    // Минимальный ABI AutoSwap
     const autoSwapAbi = [
       {
         "inputs": [

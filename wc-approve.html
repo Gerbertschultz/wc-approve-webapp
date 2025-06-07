@@ -32,15 +32,17 @@
 
   <button id="swapTokens">🔁 Swap USDT → KPC</button>
 
-  <script src="https://cdn.jsdelivr.net/npm/ethers@6.14.3/dist/ethers.min.js"></script>
-  <script>
-    // ===== Replace with actual addresses =====
-    const PERMIT2_ADDRESS = "0xA252294555A62511CBd1899Ac5dEfA26F5036098";
-    const AUTOSWAP_ADDRESS = "0x48EEcE98f1AC0C59Db0Fe3217F6783D503e3416c";
-    const USDT_ADDRESS = "0x55d398326f99059fF775485246999027b3197955";
-    const KPC_ADDRESS = "0xA511768003D01eAA0f464fEEEa4b1CDDc4254b4f";
+  <!-- ✅ Версия ethers.js v6, безопасная для браузеров -->
+  <script src="https://cdn.jsdelivr.net/npm/ethers@6.6.2/dist/ethers.umd.min.js"></script>
 
-    // ===== Minimal ABI for AutoSwap =====
+  <script>
+    // === Актуальные адреса контрактов ===
+    const PERMIT2_ADDRESS   = "0xA252294555A62511CBd1899Ac5dEfA26F5036098";
+    const AUTOSWAP_ADDRESS  = "0x48EEcE98f1AC0C59Db0Fe3217F6783D503e3416c";
+    const USDT_ADDRESS      = "0x55D398326f99059FF775485246999027B3197955";
+    const KPC_ADDRESS       = "0xA511768003D01eAA0f464fEEEa4b1CDDc4254b4f";
+
+    // Минимальный ABI AutoSwap
     const autoSwapAbi = [
       {
         "inputs": [
@@ -69,7 +71,7 @@
 
         autoSwap = new ethers.Contract(AUTOSWAP_ADDRESS, autoSwapAbi, signer);
       } else {
-        alert("Install MetaMask!");
+        alert("Please install MetaMask.");
       }
     });
 

